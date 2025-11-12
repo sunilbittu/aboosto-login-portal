@@ -56,11 +56,11 @@ const Login = () => {
       
       toast({
         title: "Login Successful",
-        description: "Welcome back to Aboosto!",
+        description: "Welcome back to Aboosto Fleet!",
       });
       
-      // Navigate to dashboard or home page
-      navigate("/");
+      // Navigate to dashboard
+      navigate("/dashboard");
     } catch (error) {
       toast({
         title: "Login Failed",

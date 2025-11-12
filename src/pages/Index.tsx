@@ -23,17 +23,17 @@ const Index = () => {
         </p>
         <div className="flex gap-4 justify-center pt-4">
           <Button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/dashboard")}
             className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shadow-md px-8"
           >
-            Sign In
+            View Dashboard
           </Button>
           <Button
-            onClick={() => navigate("/signup")}
+            onClick={() => navigate("/login")}
             variant="outline"
             className="px-8"
           >
-            Sign Up
+            Sign In
           </Button>
         </div>
       </div>
