@@ -44,6 +44,11 @@ type Driver = {
   preferredLanguage: string;
   govtIdType?: string;
   govtIdNumber?: string;
+  govtIdFrontUrl?: string;
+  govtIdBackUrl?: string;
+  drivingLicenseFrontUrl?: string;
+  drivingLicenseBackUrl?: string;
+  selfieWithIdUrl?: string;
   vehicleType: string;
   vehicleMake: string;
   vehicleModel: string;
@@ -52,13 +57,24 @@ type Driver = {
   vehicleColor?: string;
   seatingCapacity?: number;
   luggageCapacity?: number;
+  ownershipDocUrl?: string;
+  insuranceDocUrl?: string;
+  roadTaxDocUrl?: string;
   bankAccountHolderName?: string;
   bankName?: string;
   accountNumber?: string;
   ifscCode?: string;
+  swiftCode?: string;
+  paymentFrequency?: string;
+  deviceType?: string;
+  osVersion?: string;
+  fcmToken?: string;
+  appVersion?: string;
+  geolocationPermission?: boolean;
   driverRating: number;
   signupStatus: string;
   approvalDate?: string;
+  rejectionReason?: string;
   lastLogin?: string;
   termsConsent: boolean;
   fraudFlag: boolean;
@@ -66,6 +82,7 @@ type Driver = {
   createdDate: string;
   modifiedDate?: string;
   isDeletedValue: boolean;
+  ewalletId?: string;
 };
 
 // Mock data
