@@ -9,6 +9,8 @@ import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import VehicleDetails from "./pages/VehicleDetails";
+import Drivers from "./pages/Drivers";
+import DriverDetails from "./pages/DriverDetails";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/vehicle/:id" element={<VehicleDetails />} />
+          <Route path="/drivers" element={<Drivers />} />
+          <Route path="/driver/:id" element={<DriverDetails />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

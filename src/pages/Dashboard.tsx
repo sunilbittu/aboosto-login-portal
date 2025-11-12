@@ -5,7 +5,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { StatsCards } from "@/components/dashboard/StatsCards";
 import { VehicleCards } from "@/components/dashboard/VehicleCards";
 import { VehiclesTable } from "@/components/dashboard/VehiclesTable";
-import { Truck, LogOut } from "lucide-react";
+import { Truck, LogOut, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
@@ -33,6 +33,14 @@ const Dashboard = () => {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => navigate("/drivers")}
+              className="flex items-center gap-2"
+            >
+              <Users className="h-5 w-5" />
+              <span className="hidden sm:inline">Drivers</span>
+            </Button>
             <ThemeToggle />
             <Button
               variant="ghost"
