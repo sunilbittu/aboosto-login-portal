@@ -5,13 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Users as UsersIcon, Search, UserPlus, Mail, Shield, Phone, Calendar, Edit, User, Lock, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -25,6 +24,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { DataTable, ColumnDef } from "@/components/DataTable";
 
 // User roles enum matching AppUserVO
 const USER_ROLES = {
@@ -302,6 +302,116 @@ const Users = () => {
     user.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.contactNumber.includes(searchQuery)
+  );
+
+  // Define table columns
+  const columns = useMemo<ColumnDef<UserData>[]>(
+    () => [
+      {
+        header: "User",
+        accessorKey: "contactName",
+        cell: (user) => (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarFallback className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
+                {getInitials(user.firstName, user.lastName)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="font-medium flex items-center gap-2">
+                {user.contactName}
+                {user.isGoogleAccount && (
+                  <Badge variant="outline" className="text-xs">Google</Badge>
+                )}
+              </div>
+              <div className="text-sm text-muted-foreground">@{user.userName}</div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: "Contact",
+        accessorKey: "email",
+        cell: (user) => (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm">
+              <Mail className="h-3 w-3 text-muted-foreground" />
+              {user.email}
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Phone className="h-3 w-3 text-muted-foreground" />
+              {user.contactNumber}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: "Roles",
+        accessorKey: "roles",
+        cell: (user) => (
+          <div className="flex flex-wrap gap-1">
+            {user.roles.map((role) => (
+              <Badge key={role} className={getRoleBadgeVariant(role)}>
+                <Shield className="h-3 w-3 mr-1" />
+                {formatRole(role)}
+              </Badge>
+            ))}
+          </div>
+        ),
+      },
+      {
+        header: "Last Login",
+        accessorKey: "lastLoginDate",
+        cell: (user) => (
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="h-3 w-3 text-muted-foreground" />
+            <span>{new Date(user.lastLoginDate).toLocaleString()}</span>
+          </div>
+        ),
+      },
+      {
+        header: "Status",
+        accessorKey: "activated",
+        cell: (user) => (
+          <Badge 
+            className={
+              user.activated
+                ? "bg-green-500" 
+                : "bg-muted text-muted-foreground"
+            }
+          >
+            {user.activated ? "ACTIVE" : "INACTIVE"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Actions",
+        sortable: false,
+        className: "text-right",
+        cell: (user) => (
+          <div className="flex items-center justify-end gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => handleEditUser(user)}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => handleDeleteClick(user)}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    []
   );
 
   return (
@@ -596,102 +706,12 @@ const Users = () => {
               <CardDescription>A list of all users in the system</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead>Roles</TableHead>
-                    <TableHead>Last Login</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
-                              {getInitials(user.firstName, user.lastName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium flex items-center gap-2">
-                              {user.contactName}
-                              {user.isGoogleAccount && (
-                                <Badge variant="outline" className="text-xs">Google</Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground">@{user.userName}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-sm">
-                            <Mail className="h-3 w-3 text-muted-foreground" />
-                            {user.email}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <Phone className="h-3 w-3 text-muted-foreground" />
-                            {user.contactNumber}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {user.roles.map((role) => (
-                            <Badge key={role} className={getRoleBadgeVariant(role)}>
-                              <Shield className="h-3 w-3 mr-1" />
-                              {formatRole(role)}
-                            </Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <span>{new Date(user.lastLoginDate).toLocaleString()}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          className={
-                            user.activated
-                              ? "bg-green-500" 
-                              : "bg-muted text-muted-foreground"
-                          }
-                        >
-                          {user.activated ? "ACTIVE" : "INACTIVE"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleEditUser(user)}
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleDeleteClick(user)}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <DataTable 
+                data={filteredUsers} 
+                columns={columns}
+                pageSize={10}
+                pageSizeOptions={[10, 25, 50, 100]}
+              />
             </CardContent>
           </Card>
 
