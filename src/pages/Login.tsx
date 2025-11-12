@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { buildApiUrl } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
@@ -42,7 +43,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://123.176.35.22:8082/api/admin/login', {
+      const response = await fetch(buildApiUrl("/admin/login"), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
