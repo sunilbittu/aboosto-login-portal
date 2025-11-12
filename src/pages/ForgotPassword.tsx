@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { z } from "zod";
 import { ArrowLeft } from "lucide-react";
 
@@ -54,10 +55,13 @@ const ForgotPassword = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-muted/30 to-background">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">
-            Aboosto
+            Aboosto Fleet
           </h1>
           <p className="text-muted-foreground">Reset your password</p>
         </div>

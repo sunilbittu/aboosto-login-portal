@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -15,6 +17,7 @@ const loginSchema = z.object({
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
   const navigate = useNavigate();
@@ -71,12 +74,15 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-muted/30 to-background">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">
-            Aboosto
+            Aboosto Fleet
           </h1>
-          <p className="text-muted-foreground">Welcome back! Please login to continue.</p>
+          <p className="text-muted-foreground">Welcome back to Fleet Operations</p>
         </div>
 
         <Card className="shadow-lg border-border/50 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -103,15 +109,31 @@ const Login = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={errors.password ? "border-destructive" : ""}
-                  disabled={isLoading}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={errors.password ? "border-destructive pr-10" : "pr-10"}
+                    disabled={isLoading}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
                 {errors.password && (
                   <p className="text-sm text-destructive">{errors.password}</p>
                 )}
