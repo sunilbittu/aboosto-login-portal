@@ -64,6 +64,30 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/aeff9ba2-9024-4041-8663-5ef161d61f15) and click on Share -> Publish.
 
+## Configuring the API proxy for production deployments
+
+The frontend now reads its API base URL from the `VITE_API_BASE_URL` environment variable. For local development you can leave this
+unset and Vite will call the bundled Express proxy at `/api`.
+
+When you deploy the static bundle, serve it with the provided Express proxy (`npm run serve`). The server forwards every request
+under `/api` to your backend while adding the required CORS headers, so the browser never calls the backend directly.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | `/api` | Base URL used by the frontend to reach the proxy. Override it if you expose the proxy under another path. |
+| `PROXY_TARGET` | `http://123.176.35.22:8082` | Origin of the backend API. |
+| `PROXY_TARGET_PATH` | `/api` | Path prefix on the backend that should receive proxied requests. |
+| `PROXY_PREFIX` | `/api` | Path prefix exposed by the Express proxy. |
+| `PORT` | `4173` | Port the proxy listens on. |
+| `CORS_ALLOW_ORIGIN` | *(empty)* | Optional explicit `Access-Control-Allow-Origin` header sent by the proxy. |
+
+### Running the proxy in production
+
+1. Build the frontend with `npm run build` (set `VITE_API_BASE_URL=/api` if the proxy is mounted at `/api`).
+2. Start the proxy with `PORT=80 PROXY_TARGET=http://123.176.35.22:8082 npm run serve`.
+3. Point your browser to the server's origin (e.g. `https://your-ec2-hostname`) and the app will transparently proxy API requests
+   to the backend without requiring backend CORS support.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
