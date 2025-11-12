@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,18 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  ArrowLeft, 
   User, 
   Lock, 
   Bell, 
   Save,
   Mail,
   Phone,
-  Briefcase
+  Shield,
+  Calendar
 } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -33,25 +33,40 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+// User roles enum matching AppUserVO
+const USER_ROLES = {
+  SUPER_ADMIN: "ROLE_SUPER_ADMIN",
+  ADMIN: "ROLE_ADMIN",
+  USER: "ROLE_USER"
+} as const;
+
 // Validation schemas
 const profileSchema = z.object({
-  name: z.string()
+  userName: z.string()
     .trim()
-    .min(2, { message: "Name must be at least 2 characters" })
-    .max(100, { message: "Name must be less than 100 characters" }),
+    .min(3, { message: "Username must be at least 3 characters" })
+    .max(50, { message: "Username must be less than 50 characters" }),
+  firstName: z.string()
+    .trim()
+    .min(2, { message: "First name must be at least 2 characters" })
+    .max(50, { message: "First name must be less than 50 characters" }),
+  lastName: z.string()
+    .trim()
+    .min(2, { message: "Last name must be at least 2 characters" })
+    .max(50, { message: "Last name must be less than 50 characters" }),
+  contactName: z.string()
+    .trim()
+    .min(2, { message: "Contact name must be at least 2 characters" })
+    .max(100, { message: "Contact name must be less than 100 characters" }),
   email: z.string()
     .trim()
     .email({ message: "Invalid email address" })
     .max(255, { message: "Email must be less than 255 characters" }),
-  phone: z.string()
+  contactNumber: z.string()
     .trim()
-    .min(10, { message: "Phone number must be at least 10 digits" })
-    .max(20, { message: "Phone number must be less than 20 characters" })
-    .regex(/^[+\d\s()-]+$/, { message: "Invalid phone number format" }),
-  role: z.string()
-    .trim()
-    .min(2, { message: "Role must be at least 2 characters" })
-    .max(50, { message: "Role must be less than 50 characters" })
+    .min(10, { message: "Contact number must be at least 10 digits" })
+    .max(20, { message: "Contact number must be less than 20 characters" })
+    .regex(/^[+\d\s()-]+$/, { message: "Invalid phone number format" })
 });
 
 const passwordSchema = z.object({
@@ -72,9 +87,23 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 const Profile = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("profile");
+  
+  // Mock user data matching AppUserVO structure
+  const [userData] = useState({
+    id: 1,
+    userName: "admin",
+    firstName: "John",
+    lastName: "Admin",
+    contactName: "John Admin",
+    email: "admin@aboosto.com",
+    contactNumber: "+234 801 234 5678",
+    roles: [USER_ROLES.ADMIN],
+    lastLoginDate: "2025-01-10T08:30:00",
+    isGoogleAccount: false,
+    activated: true,
+  });
   
   // Notification preferences state
   const [notifications, setNotifications] = useState({
@@ -90,10 +119,12 @@ const Profile = () => {
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      name: "Admin User",
-      email: "admin@aboosto.com",
-      phone: "+234 801 234 5678",
-      role: "Fleet Manager",
+      userName: userData.userName,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      contactName: userData.contactName,
+      email: userData.email,
+      contactNumber: userData.contactNumber,
     },
   });
 
@@ -136,52 +167,65 @@ const Profile = () => {
     });
   };
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName[0]}${lastName[0]}`.toUpperCase();
+  };
+
+  const getRoleBadgeVariant = (role: string) => {
+    if (role === USER_ROLES.SUPER_ADMIN) return "bg-destructive";
+    if (role === USER_ROLES.ADMIN) return "bg-gradient-to-r from-primary to-secondary";
+    return "bg-muted";
+  };
+
+  const formatRole = (role: string) => {
+    return role.replace("ROLE_", "").replace("_", " ");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/dashboard")}
-              className="rounded-full"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <User className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Profile Settings
-            </h1>
-          </div>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container px-4 py-8 max-w-4xl">
-        {/* Profile Header */}
-        <Card className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row items-center gap-6">
-              <Avatar className="h-24 w-24 border-4 border-primary/20">
-                <AvatarFallback className="bg-gradient-to-r from-primary to-secondary text-primary-foreground text-3xl font-bold">
-                  {getInitials(profileForm.getValues("name"))}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 text-center sm:text-left">
-                <h2 className="text-3xl font-bold">{profileForm.getValues("name")}</h2>
-                <p className="text-muted-foreground mt-1">{profileForm.getValues("role")}</p>
-                <p className="text-sm text-muted-foreground mt-1">{profileForm.getValues("email")}</p>
+    <DashboardLayout>
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="container px-4 py-8 max-w-4xl">
+          {/* Profile Header */}
+          <Card className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                <Avatar className="h-24 w-24 border-4 border-primary/20">
+                  <AvatarFallback className="bg-gradient-to-r from-primary to-secondary text-primary-foreground text-3xl font-bold">
+                    {getInitials(userData.firstName, userData.lastName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 text-center sm:text-left space-y-2">
+                  <div className="flex items-center gap-2 justify-center sm:justify-start">
+                    <h2 className="text-3xl font-bold">{userData.contactName}</h2>
+                    {userData.isGoogleAccount && (
+                      <Badge variant="outline" className="text-xs">
+                        Google Account
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground justify-center sm:justify-start">
+                    <Mail className="h-4 w-4" />
+                    <p className="text-sm">{userData.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
+                    {userData.roles.map((role) => (
+                      <Badge key={role} className={getRoleBadgeVariant(role)}>
+                        <Shield className="h-3 w-3 mr-1" />
+                        {formatRole(role)}
+                      </Badge>
+                    ))}
+                    <Badge className={userData.activated ? "bg-green-500" : "bg-muted"}>
+                      {userData.activated ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground justify-center sm:justify-start">
+                    <Calendar className="h-4 w-4" />
+                    <span>Last login: {new Date(userData.lastLoginDate).toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
         {/* Settings Tabs */}
         <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -215,10 +259,63 @@ const Profile = () => {
                     <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-6">
                       <FormField
                         control={profileForm.control}
-                        name="name"
+                        name="userName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Full Name</FormLabel>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input placeholder="username" className="pl-10" {...field} />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={profileForm.control}
+                          name="firstName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>First Name</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input placeholder="John" className="pl-10" {...field} />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={profileForm.control}
+                          name="lastName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Last Name</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input placeholder="Doe" className="pl-10" {...field} />
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={profileForm.control}
+                        name="contactName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Contact Name</FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -249,31 +346,14 @@ const Profile = () => {
 
                       <FormField
                         control={profileForm.control}
-                        name="phone"
+                        name="contactNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Phone Number</FormLabel>
+                            <FormLabel>Contact Number</FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input placeholder="+234 801 234 5678" className="pl-10" {...field} />
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={profileForm.control}
-                        name="role"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Role</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input placeholder="Fleet Manager" className="pl-10" {...field} />
                               </div>
                             </FormControl>
                             <FormMessage />
@@ -478,9 +558,10 @@ const Profile = () => {
               </Card>
             </TabsContent>
           </Tabs>
+          </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 
