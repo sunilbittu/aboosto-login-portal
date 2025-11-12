@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Users as UsersIcon, Search, UserPlus, Mail, Shield, Phone, Calendar, Edit, User, Lock } from "lucide-react";
+import { Users as UsersIcon, Search, UserPlus, Mail, Shield, Phone, Calendar, Edit, User, Lock, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
@@ -187,7 +188,9 @@ const Users = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
   const { toast } = useToast();
 
   // Add user form
@@ -259,6 +262,25 @@ const Users = () => {
       activated: user.activated,
     });
     setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (user: UserData) => {
+    setUserToDelete(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (userToDelete) {
+      // In production, this would call an API to delete the user
+      console.log("Deleting user:", userToDelete.id);
+      toast({
+        title: "User Deleted",
+        description: `User ${userToDelete.userName} has been permanently deleted.`,
+        variant: "destructive",
+      });
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    }
   };
 
   const getInitials = (firstName: string, lastName: string) => {
@@ -646,14 +668,25 @@ const Users = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditUser(user)}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteClick(user)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -661,6 +694,53 @@ const Users = () => {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="bg-background">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                  <Trash2 className="h-5 w-5" />
+                  Delete User Account
+                </AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <p>
+                    Are you sure you want to delete the user account for{" "}
+                    <span className="font-semibold text-foreground">
+                      {userToDelete?.contactName}
+                    </span>{" "}
+                    (@{userToDelete?.userName})?
+                  </p>
+                  <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                    <p className="text-sm font-medium text-destructive">
+                      ⚠️ Warning: This action cannot be undone
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      <li>• All user data will be permanently deleted</li>
+                      <li>• User access will be immediately revoked</li>
+                      <li>• Associated records may be affected</li>
+                      <li>• This action is irreversible</li>
+                    </ul>
+                  </div>
+                  <p className="text-sm">
+                    Please confirm that you want to proceed with deleting this user account.
+                  </p>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setUserToDelete(null)}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete User
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Edit User Dialog */}
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
