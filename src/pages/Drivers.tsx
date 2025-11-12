@@ -25,7 +25,9 @@ import {
   Truck,
   UserCheck,
   Phone,
-  Mail
+  Mail,
+  Upload,
+  FileText
 } from "lucide-react";
 
 // Driver type based on DriverDTO
@@ -184,6 +186,18 @@ const driverFormSchema = z.object({
   otpVerified: z.boolean(),
   termsConsent: z.boolean(),
   suspensionStatus: z.boolean(),
+  // Document fields
+  profilePhotoUrl: z.string().optional(),
+  govtIdType: z.string().optional(),
+  govtIdNumber: z.string().optional(),
+  govtIdFrontUrl: z.string().optional(),
+  govtIdBackUrl: z.string().optional(),
+  drivingLicenseFrontUrl: z.string().optional(),
+  drivingLicenseBackUrl: z.string().optional(),
+  selfieWithIdUrl: z.string().optional(),
+  ownershipDocUrl: z.string().optional(),
+  insuranceDocUrl: z.string().optional(),
+  roadTaxDocUrl: z.string().optional(),
 });
 
 type DriverFormValues = z.infer<typeof driverFormSchema>;
@@ -213,6 +227,17 @@ const Drivers = () => {
       otpVerified: false,
       termsConsent: false,
       suspensionStatus: false,
+      profilePhotoUrl: "",
+      govtIdType: "",
+      govtIdNumber: "",
+      govtIdFrontUrl: "",
+      govtIdBackUrl: "",
+      drivingLicenseFrontUrl: "",
+      drivingLicenseBackUrl: "",
+      selfieWithIdUrl: "",
+      ownershipDocUrl: "",
+      insuranceDocUrl: "",
+      roadTaxDocUrl: "",
     },
   });
 
@@ -349,6 +374,17 @@ const Drivers = () => {
       otpVerified: driver.otpVerified,
       termsConsent: driver.termsConsent,
       suspensionStatus: driver.suspensionStatus,
+      profilePhotoUrl: driver.profilePhotoUrl,
+      govtIdType: driver.govtIdType,
+      govtIdNumber: driver.govtIdNumber,
+      govtIdFrontUrl: driver.govtIdFrontUrl,
+      govtIdBackUrl: driver.govtIdBackUrl,
+      drivingLicenseFrontUrl: driver.drivingLicenseFrontUrl,
+      drivingLicenseBackUrl: driver.drivingLicenseBackUrl,
+      selfieWithIdUrl: driver.selfieWithIdUrl,
+      ownershipDocUrl: driver.ownershipDocUrl,
+      insuranceDocUrl: driver.insuranceDocUrl,
+      roadTaxDocUrl: driver.roadTaxDocUrl,
     });
     setIsEditDialogOpen(true);
   };
@@ -871,6 +907,310 @@ const Drivers = () => {
                         )}
                       />
                     </div>
+
+                    {/* Document Upload Section */}
+                    <div className="space-y-4 border-t pt-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <h3 className="text-lg font-semibold">Document Uploads</h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Profile Photo */}
+                        <FormField
+                          control={addForm.control}
+                          name="profilePhotoUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Profile Photo</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        // Simulate file upload - in production, upload to storage
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Government ID Type */}
+                        <FormField
+                          control={addForm.control}
+                          name="govtIdType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Government ID Type</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select ID type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Passport">Passport</SelectItem>
+                                  <SelectItem value="National ID">National ID</SelectItem>
+                                  <SelectItem value="Driver License">Driver License</SelectItem>
+                                  <SelectItem value="Voter ID">Voter ID</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Government ID Number */}
+                        <FormField
+                          control={addForm.control}
+                          name="govtIdNumber"
+                          render={({ field }) => (
+                            <FormItem className="col-span-2">
+                              <FormLabel>Government ID Number</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Enter ID number" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Government ID Front */}
+                        <FormField
+                          control={addForm.control}
+                          name="govtIdFrontUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Government ID (Front)</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Government ID Back */}
+                        <FormField
+                          control={addForm.control}
+                          name="govtIdBackUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Government ID (Back)</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Driving License Front */}
+                        <FormField
+                          control={addForm.control}
+                          name="drivingLicenseFrontUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Driving License (Front)</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Driving License Back */}
+                        <FormField
+                          control={addForm.control}
+                          name="drivingLicenseBackUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Driving License (Back)</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Selfie with ID */}
+                        <FormField
+                          control={addForm.control}
+                          name="selfieWithIdUrl"
+                          render={({ field }) => (
+                            <FormItem className="col-span-2">
+                              <FormLabel>Selfie with ID</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Vehicle Ownership Document */}
+                        <FormField
+                          control={addForm.control}
+                          name="ownershipDocUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vehicle Ownership Doc</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Insurance Document */}
+                        <FormField
+                          control={addForm.control}
+                          name="insuranceDocUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Insurance Document</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Road Tax Document */}
+                        <FormField
+                          control={addForm.control}
+                          name="roadTaxDocUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Road Tax Document</FormLabel>
+                              <FormControl>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        field.onChange(URL.createObjectURL(file));
+                                      }
+                                    }}
+                                    className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                                  />
+                                  {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
                     <DialogFooter>
                       <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
                         Add Driver
@@ -1218,6 +1558,309 @@ const Drivers = () => {
                   )}
                 />
               </div>
+
+              {/* Document Upload Section */}
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Document Uploads</h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Profile Photo */}
+                  <FormField
+                    control={editForm.control}
+                    name="profilePhotoUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Profile Photo</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Government ID Type */}
+                  <FormField
+                    control={editForm.control}
+                    name="govtIdType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Government ID Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select ID type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Passport">Passport</SelectItem>
+                            <SelectItem value="National ID">National ID</SelectItem>
+                            <SelectItem value="Driver License">Driver License</SelectItem>
+                            <SelectItem value="Voter ID">Voter ID</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Government ID Number */}
+                  <FormField
+                    control={editForm.control}
+                    name="govtIdNumber"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Government ID Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Enter ID number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Government ID Front */}
+                  <FormField
+                    control={editForm.control}
+                    name="govtIdFrontUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Government ID (Front)</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Government ID Back */}
+                  <FormField
+                    control={editForm.control}
+                    name="govtIdBackUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Government ID (Back)</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Driving License Front */}
+                  <FormField
+                    control={editForm.control}
+                    name="drivingLicenseFrontUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Driving License (Front)</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Driving License Back */}
+                  <FormField
+                    control={editForm.control}
+                    name="drivingLicenseBackUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Driving License (Back)</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Selfie with ID */}
+                  <FormField
+                    control={editForm.control}
+                    name="selfieWithIdUrl"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>Selfie with ID</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Vehicle Ownership Document */}
+                  <FormField
+                    control={editForm.control}
+                    name="ownershipDocUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Vehicle Ownership Doc</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Insurance Document */}
+                  <FormField
+                    control={editForm.control}
+                    name="insuranceDocUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Insurance Document</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Road Tax Document */}
+                  <FormField
+                    control={editForm.control}
+                    name="roadTaxDocUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Road Tax Document</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  field.onChange(URL.createObjectURL(file));
+                                }
+                              }}
+                              className="file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-3 file:py-1"
+                            />
+                            {field.value && <Upload className="h-4 w-4 text-green-500" />}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
               <DialogFooter>
                 <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
                   Update Driver
