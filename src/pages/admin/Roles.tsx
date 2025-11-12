@@ -28,21 +28,38 @@ import { DataTable, ColumnDef } from "@/components/DataTable";
 
 // Available permissions for the system
 const AVAILABLE_PERMISSIONS = [
-  "CREATE_USER",
-  "EDIT_USER",
-  "DELETE_USER",
-  "VIEW_USER",
-  "MANAGE_ROLES",
-  "MANAGE_PERMISSIONS",
-  "VIEW_DASHBOARD",
-  "MANAGE_DRIVERS",
-  "MANAGE_VEHICLES",
-  "MANAGE_RIDERS",
-  "VIEW_REPORTS",
-  "EXPORT_DATA",
-  "MANAGE_PRICING",
-  "MANAGE_PROMOTIONS",
-  "VIEW_ANALYTICS",
+  // Fleet Management
+  "View Vehicles",
+  "Add Vehicle",
+  "Edit Vehicle",
+  "Delete Vehicle",
+  // Driver Management
+  "View Drivers",
+  "Add Driver",
+  "Edit Driver",
+  "Assign Vehicle",
+  // User Management
+  "View Users",
+  "Create User",
+  "Edit User",
+  "Delete User",
+  // Reports
+  "View Reports",
+  "Export Reports",
+  "Create Reports",
+  // Configuration
+  "Manage Countries",
+  "Manage States",
+  "Manage Cities",
+  "Manage Vehicle Categories",
+  "Manage Base Pricing",
+  "Manage Surge Pricing",
+  "Manage Promotions",
+  "Manage Referrals",
+  // Admin
+  "Manage Roles",
+  "Manage Permissions",
+  "View Riders",
 ];
 
 // Type for role data matching RolesDTO
@@ -87,7 +104,7 @@ const rolesData: RoleData[] = [
     roleName: "Super Admin", 
     roleDescription: "Full system access with all permissions",
     rolePermissions: "Complete control over all system features",
-    permissions: ["CREATE_USER", "EDIT_USER", "DELETE_USER", "VIEW_USER", "MANAGE_ROLES", "MANAGE_PERMISSIONS", "VIEW_DASHBOARD", "MANAGE_DRIVERS", "MANAGE_VEHICLES"],
+    permissions: ["View Vehicles", "Add Vehicle", "Edit Vehicle", "Delete Vehicle", "View Drivers", "Add Driver", "Edit Driver", "View Users", "Create User", "Edit User", "Delete User", "Manage Roles", "Manage Permissions"],
     restricted: [],
     isDeletedValue: false,
     remarks: "Primary administrator role",
@@ -98,8 +115,8 @@ const rolesData: RoleData[] = [
     roleName: "Fleet Manager", 
     roleDescription: "Manages fleet operations and driver assignments",
     rolePermissions: "Fleet and driver management capabilities",
-    permissions: ["VIEW_DASHBOARD", "MANAGE_DRIVERS", "MANAGE_VEHICLES", "VIEW_REPORTS"],
-    restricted: ["DELETE_USER", "MANAGE_ROLES"],
+    permissions: ["View Vehicles", "Add Vehicle", "Edit Vehicle", "View Drivers", "Add Driver", "Edit Driver", "Assign Vehicle", "View Reports"],
+    restricted: ["Delete Vehicle", "Delete User", "Manage Roles"],
     isDeletedValue: false,
     remarks: "Operational management role",
     status: "active"
@@ -109,8 +126,8 @@ const rolesData: RoleData[] = [
     roleName: "Staff", 
     roleDescription: "Basic operational access for daily tasks",
     rolePermissions: "Limited operational permissions",
-    permissions: ["VIEW_DASHBOARD", "VIEW_USER", "VIEW_REPORTS"],
-    restricted: ["DELETE_USER", "MANAGE_ROLES", "MANAGE_PERMISSIONS"],
+    permissions: ["View Vehicles", "View Drivers", "View Users", "View Reports"],
+    restricted: ["Delete User", "Manage Roles", "Manage Permissions", "Add Vehicle", "Edit Vehicle"],
     isDeletedValue: false,
     remarks: "Standard staff member",
     status: "active"
@@ -120,8 +137,8 @@ const rolesData: RoleData[] = [
     roleName: "Viewer", 
     roleDescription: "Read-only access to system data",
     rolePermissions: "View-only permissions",
-    permissions: ["VIEW_DASHBOARD", "VIEW_REPORTS", "VIEW_ANALYTICS"],
-    restricted: ["CREATE_USER", "EDIT_USER", "DELETE_USER", "MANAGE_ROLES"],
+    permissions: ["View Vehicles", "View Drivers", "View Reports"],
+    restricted: ["Create User", "Edit User", "Delete User", "Manage Roles", "Add Vehicle", "Edit Vehicle", "Delete Vehicle"],
     isDeletedValue: false,
     remarks: "External viewer or auditor",
     status: "active"
@@ -264,7 +281,7 @@ const Roles = () => {
             {role.permissions.slice(0, 3).map((permission) => (
               <Badge key={permission} variant="outline" className="text-xs">
                 <Lock className="h-3 w-3 mr-1" />
-                {permission.replace(/_/g, " ")}
+                {permission}
               </Badge>
             ))}
             {role.permissions.length > 3 && (
