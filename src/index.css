@@ -48,6 +48,13 @@ All colors MUST be HSL.
     
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Textured patterns */
+    --pattern-dots: radial-gradient(circle, hsl(200 95% 42% / 0.05) 1px, transparent 1px);
+    --pattern-grid: linear-gradient(hsl(200 95% 42% / 0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, hsl(200 95% 42% / 0.03) 1px, transparent 1px);
+    --pattern-size-dots: 24px 24px;
+    --pattern-size-grid: 40px 40px;
 
     --sidebar-background: 0 0% 98%;
 
@@ -100,6 +107,11 @@ All colors MUST be HSL.
     
     --shadow-soft: 0 4px 20px -2px hsl(200 95% 45% / 0.3);
     --shadow-medium: 0 8px 30px -4px hsl(200 95% 45% / 0.4);
+    
+    --pattern-dots: radial-gradient(circle, hsl(200 95% 45% / 0.08) 1px, transparent 1px);
+    --pattern-grid: linear-gradient(hsl(200 95% 45% / 0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, hsl(200 95% 45% / 0.05) 1px, transparent 1px);
+    
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
