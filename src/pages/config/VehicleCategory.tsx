@@ -6,9 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Car, Search, Plus, Edit, Trash2, Users, Briefcase, DollarSign } from "lucide-react";
+import { Car, Search, Plus, Edit, Trash2, Users, Briefcase, DollarSign, MoreHorizontal } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,27 +21,18 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { DataTable, ColumnDef } from "@/components/DataTable";
+import {
+  useVehicleCategories,
+  useCreateVehicleCategory,
+  useUpdateVehicleCategory,
+  useDeleteVehicleCategory,
+  useToggleVehicleCategoryStatus,
+  VehicleCategoryDTO
+} from "@/services/queryService";
+import { Pageable } from "@/services/apiService";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-// Type for vehicle category data matching VehicleCategoryDTO
-type VehicleCategoryData = {
-  vehicleCategoryId: number;
-  vehicleCategoryName: string;
-  vehicleDescription: string;
-  maxPassengerCount: number;
-  maxLuggageVolume: number;
-  baseFare: number;
-  ratePerKm: number;
-  ratePerMinute: number;
-  cancellationFee: number;
-  waitTimeLimit: number;
-  vehicleIcon: string;
-  isActive: boolean;
-  createdBy: string;
-  createdDate: string;
-  isDeletedValue: boolean;
-  modifiedBy: string;
-  modifiedDate: string;
-};
+// Use the imported VehicleCategoryDTO type
 
 // Validation schema for add/edit vehicle category
 const vehicleCategorySchema = z.object({
@@ -85,94 +75,30 @@ const vehicleCategorySchema = z.object({
 
 type VehicleCategoryFormValues = z.infer<typeof vehicleCategorySchema>;
 
-// Mock vehicle categories data
-const vehicleCategoriesData: VehicleCategoryData[] = [
-  {
-    vehicleCategoryId: 1,
-    vehicleCategoryName: "Economy",
-    vehicleDescription: "Affordable rides for everyday travel",
-    maxPassengerCount: 4,
-    maxLuggageVolume: 2.5,
-    baseFare: 50.00,
-    ratePerKm: 10.00,
-    ratePerMinute: 2.00,
-    cancellationFee: 25.00,
-    waitTimeLimit: 5.0,
-    vehicleIcon: "🚗",
-    isActive: true,
-    createdBy: "admin",
-    createdDate: "2024-01-15T10:30:00Z",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-15T10:30:00Z",
-  },
-  {
-    vehicleCategoryId: 2,
-    vehicleCategoryName: "Premium",
-    vehicleDescription: "Luxury rides with premium vehicles",
-    maxPassengerCount: 4,
-    maxLuggageVolume: 3.0,
-    baseFare: 100.00,
-    ratePerKm: 18.00,
-    ratePerMinute: 3.50,
-    cancellationFee: 50.00,
-    waitTimeLimit: 10.0,
-    vehicleIcon: "🚙",
-    isActive: true,
-    createdBy: "admin",
-    createdDate: "2024-01-16T11:00:00Z",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-16T11:00:00Z",
-  },
-  {
-    vehicleCategoryId: 3,
-    vehicleCategoryName: "SUV",
-    vehicleDescription: "Spacious rides for groups and families",
-    maxPassengerCount: 6,
-    maxLuggageVolume: 5.0,
-    baseFare: 120.00,
-    ratePerKm: 20.00,
-    ratePerMinute: 4.00,
-    cancellationFee: 60.00,
-    waitTimeLimit: 10.0,
-    vehicleIcon: "🚐",
-    isActive: true,
-    createdBy: "admin",
-    createdDate: "2024-01-17T09:15:00Z",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-17T09:15:00Z",
-  },
-  {
-    vehicleCategoryId: 4,
-    vehicleCategoryName: "Electric",
-    vehicleDescription: "Eco-friendly electric vehicles",
-    maxPassengerCount: 4,
-    maxLuggageVolume: 2.0,
-    baseFare: 60.00,
-    ratePerKm: 12.00,
-    ratePerMinute: 2.50,
-    cancellationFee: 30.00,
-    waitTimeLimit: 5.0,
-    vehicleIcon: "⚡",
-    isActive: true,
-    createdBy: "admin",
-    createdDate: "2024-01-18T14:20:00Z",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-18T14:20:00Z",
-  },
-];
 
 export default function VehicleCategory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<VehicleCategoryData | null>(null);
-  const [categoryToDelete, setCategoryToDelete] = useState<VehicleCategoryData | null>(null);
-  const { toast } = useToast();
+  const [selectedCategory, setSelectedCategory] = useState<VehicleCategoryDTO | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<VehicleCategoryDTO | null>(null);
+
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 0, size: 10 });
+
+  // API hooks
+  const { data: categoriesResponse, isLoading, error } = useVehicleCategories(
+    { page: pagination.page, size: pagination.size, sort: [] },
+    searchQuery || undefined
+  );
+
+  const createMutation = useCreateVehicleCategory();
+  const updateMutation = useUpdateVehicleCategory();
+  const deleteMutation = useDeleteVehicleCategory();
+  const toggleStatusMutation = useToggleVehicleCategoryStatus();
+
+  const categories = categoriesResponse?.data || [];
 
   // Add category form
   const addCategoryForm = useForm<VehicleCategoryFormValues>({
@@ -211,69 +137,90 @@ export default function VehicleCategory() {
   });
 
   const onAddCategorySubmit = (data: VehicleCategoryFormValues) => {
-    console.log("Adding vehicle category:", data);
-    toast({
-      title: "Vehicle Category Created",
-      description: `Category "${data.vehicleCategoryName}" has been successfully created.`,
+    createMutation.mutate({
+      vehicleCategoryName: data.vehicleCategoryName,
+      vehicleDescription: data.vehicleDescription,
+      maxPassengerCount: data.maxPassengerCount,
+      maxLuggageVolume: data.maxLuggageVolume,
+      baseFare: data.baseFare,
+      ratePerKm: data.ratePerKm,
+      ratePerMinute: data.ratePerMinute,
+      cancellationFee: data.cancellationFee,
+      waitTimeLimit: data.waitTimeLimit,
+      vehicleIcon: data.vehicleIcon,
+      isActive: data.isActive,
     });
     setIsAddDialogOpen(false);
     addCategoryForm.reset();
   };
 
   const onEditCategorySubmit = (data: VehicleCategoryFormValues) => {
-    console.log("Updating vehicle category:", data);
-    toast({
-      title: "Vehicle Category Updated",
-      description: `Category "${data.vehicleCategoryName}" has been successfully updated.`,
-    });
+    if (selectedCategory) {
+      updateMutation.mutate({
+        id: selectedCategory.vehicleCategoryId!,
+        data: {
+          vehicleCategoryId: selectedCategory.vehicleCategoryId,
+          vehicleCategoryName: data.vehicleCategoryName,
+          vehicleDescription: data.vehicleDescription,
+          maxPassengerCount: data.maxPassengerCount,
+          maxLuggageVolume: data.maxLuggageVolume,
+          baseFare: data.baseFare,
+          ratePerKm: data.ratePerKm,
+          ratePerMinute: data.ratePerMinute,
+          cancellationFee: data.cancellationFee,
+          waitTimeLimit: data.waitTimeLimit,
+          vehicleIcon: data.vehicleIcon,
+          isActive: data.isActive,
+        },
+      });
+    }
     setIsEditDialogOpen(false);
     setSelectedCategory(null);
     editCategoryForm.reset();
   };
 
-  const handleEditCategory = (category: VehicleCategoryData) => {
+  const handleEditCategory = (category: VehicleCategoryDTO) => {
     setSelectedCategory(category);
     editCategoryForm.reset({
-      vehicleCategoryName: category.vehicleCategoryName,
-      vehicleDescription: category.vehicleDescription,
-      maxPassengerCount: category.maxPassengerCount,
-      maxLuggageVolume: category.maxLuggageVolume,
-      baseFare: category.baseFare,
-      ratePerKm: category.ratePerKm,
-      ratePerMinute: category.ratePerMinute,
-      cancellationFee: category.cancellationFee,
-      waitTimeLimit: category.waitTimeLimit,
-      vehicleIcon: category.vehicleIcon,
-      isActive: category.isActive,
+      vehicleCategoryName: category.vehicleCategoryName || "",
+      vehicleDescription: category.vehicleDescription || "",
+      maxPassengerCount: category.maxPassengerCount || 4,
+      maxLuggageVolume: category.maxLuggageVolume || 2.5,
+      baseFare: category.baseFare || 0,
+      ratePerKm: category.ratePerKm || 0,
+      ratePerMinute: category.ratePerMinute || 0,
+      cancellationFee: category.cancellationFee || 0,
+      waitTimeLimit: category.waitTimeLimit || 5,
+      vehicleIcon: category.vehicleIcon || "",
+      isActive: category.isActive ?? true,
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteClick = (category: VehicleCategoryData) => {
+  const handleDeleteClick = (category: VehicleCategoryDTO) => {
     setCategoryToDelete(category);
     setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = () => {
     if (categoryToDelete) {
-      console.log("Deleting vehicle category:", categoryToDelete.vehicleCategoryId);
-      toast({
-        title: "Vehicle Category Deleted",
-        description: `Category "${categoryToDelete.vehicleCategoryName}" has been permanently deleted.`,
-        variant: "destructive",
-      });
+      deleteMutation.mutate(categoryToDelete.vehicleCategoryId!);
       setIsDeleteDialogOpen(false);
       setCategoryToDelete(null);
     }
   };
 
-  const filteredCategories = vehicleCategoriesData.filter(category =>
-    category.vehicleCategoryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    category.vehicleDescription.toLowerCase().includes(searchQuery.toLowerCase())
+  const handleToggleStatus = (category: VehicleCategoryDTO) => {
+    toggleStatusMutation.mutate(category.vehicleCategoryId!);
+  };
+
+  const filteredCategories = categories.filter(category =>
+    category.vehicleCategoryName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    category.vehicleDescription?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Define table columns
-  const columns = useMemo<ColumnDef<VehicleCategoryData>[]>(
+  const columns = useMemo<ColumnDef<VehicleCategoryDTO>[]>(
     () => [
       {
         header: "Category",
@@ -282,8 +229,8 @@ export default function VehicleCategory() {
           <div className="flex items-center gap-2">
             <span className="text-2xl">{category.vehicleIcon || "🚗"}</span>
             <div>
-              <div className="font-semibold">{category.vehicleCategoryName}</div>
-              <div className="text-xs text-muted-foreground">{category.vehicleDescription}</div>
+              <div className="font-semibold">{category.vehicleCategoryName || "N/A"}</div>
+              <div className="text-xs text-muted-foreground">{category.vehicleDescription || "No description"}</div>
             </div>
           </div>
         ),
@@ -295,11 +242,11 @@ export default function VehicleCategory() {
           <div className="space-y-1">
             <div className="flex items-center gap-1 text-sm">
               <Users className="h-3 w-3 text-muted-foreground" />
-              <span>{category.maxPassengerCount} passengers</span>
+              <span>{category.maxPassengerCount || 0} passengers</span>
             </div>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <Briefcase className="h-3 w-3" />
-              <span>{category.maxLuggageVolume} cu.ft</span>
+              <span>{category.maxLuggageVolume || 0} cu.ft</span>
             </div>
           </div>
         ),
@@ -310,7 +257,7 @@ export default function VehicleCategory() {
         cell: (category) => (
           <div className="flex items-center gap-1 font-semibold text-primary">
             <DollarSign className="h-3 w-3" />
-            {category.baseFare.toFixed(2)}
+            {(category.baseFare || 0).toFixed(2)}
           </div>
         ),
       },
@@ -319,7 +266,7 @@ export default function VehicleCategory() {
         accessorKey: "ratePerKm",
         cell: (category) => (
           <div className="text-sm">
-            ${category.ratePerKm.toFixed(2)}
+            ${(category.ratePerKm || 0).toFixed(2)}
           </div>
         ),
       },
@@ -328,7 +275,7 @@ export default function VehicleCategory() {
         accessorKey: "ratePerMinute",
         cell: (category) => (
           <div className="text-sm">
-            ${category.ratePerMinute.toFixed(2)}
+            ${(category.ratePerMinute || 0).toFixed(2)}
           </div>
         ),
       },
@@ -337,7 +284,7 @@ export default function VehicleCategory() {
         accessorKey: "cancellationFee",
         cell: (category) => (
           <div className="text-sm text-muted-foreground">
-            ${category.cancellationFee.toFixed(2)}
+            ${(category.cancellationFee || 0).toFixed(2)}
           </div>
         ),
       },
@@ -346,7 +293,7 @@ export default function VehicleCategory() {
         accessorKey: "waitTimeLimit",
         cell: (category) => (
           <div className="text-sm">
-            {category.waitTimeLimit} min
+            {category.waitTimeLimit || 0} min
           </div>
         ),
       },
@@ -364,25 +311,30 @@ export default function VehicleCategory() {
         sortable: false,
         className: "text-right",
         cell: (category) => (
-          <div className="flex items-center justify-end gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleEditCategory(category)}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleDeleteClick(category)}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditCategory(category)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleToggleStatus(category)}>
+                <Switch className="h-4 w-4 mr-2" />
+                {category.isActive ? "Deactivate" : "Activate"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(category)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
@@ -691,11 +643,24 @@ export default function VehicleCategory() {
 
           {/* Categories Table */}
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <DataTable
-              data={filteredCategories}
-              columns={columns}
-              pageSize={10}
-            />
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-destructive">Error loading vehicle categories</p>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
+            ) : (
+              <DataTable
+                data={filteredCategories}
+                columns={columns}
+                pageSize={pagination.size}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                currentPage={pagination.page}
+              />
+            )}
           </div>
 
           {/* Edit Category Dialog */}

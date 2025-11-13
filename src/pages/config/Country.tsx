@@ -6,9 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Globe, Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Globe, Search, Plus, Edit, Trash2, MoreHorizontal } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,22 +20,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { DataTable, ColumnDef } from "@/components/DataTable";
-
-// Type for country data matching CountryMaster DTO
-type CountryData = {
-  countryId: number;
-  code: string;
-  countryName: string;
-  createdBy: string;
-  createdDate: string;
-  createdSystemIp: string;
-  isDeletedValue: boolean;
-  modifiedBy: string;
-  modifiedDate: string;
-  modifiedSystemIp: string;
-  remarks: string;
-  status: string;
-};
+import {
+  useCountries,
+  useCreateCountry,
+  useUpdateCountry,
+  useDeleteCountry,
+  CountryMasterDTO
+} from "@/services/queryService";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // Validation schema for add/edit country
 const countrySchema = z.object({
@@ -49,66 +40,39 @@ const countrySchema = z.object({
     .trim()
     .min(2, { message: "Country name must be at least 2 characters" })
     .max(100, { message: "Country name must be less than 100 characters" }),
-  status: z.enum(["active", "inactive"]),
-  remarks: z.string().max(500, { message: "Remarks must be less than 500 characters" }).optional(),
+  status: z.enum(["active", "inactive"], {
+    required_error: "Please select a status",
+  }),
+  remarks: z.string()
+    .trim()
+    .max(500, { message: "Remarks must be less than 500 characters" })
+    .optional(),
 });
 
 type CountryFormValues = z.infer<typeof countrySchema>;
-
-// Mock data matching CountryMaster DTO
-const countriesData: CountryData[] = [
-  {
-    countryId: 1,
-    code: "US",
-    countryName: "United States",
-    createdBy: "admin",
-    createdDate: "2024-01-15T10:30:00Z",
-    createdSystemIp: "192.168.1.1",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-15T10:30:00Z",
-    modifiedSystemIp: "192.168.1.1",
-    remarks: "Primary operating country",
-    status: "active",
-  },
-  {
-    countryId: 2,
-    code: "UK",
-    countryName: "United Kingdom",
-    createdBy: "admin",
-    createdDate: "2024-01-16T11:00:00Z",
-    createdSystemIp: "192.168.1.1",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-16T11:00:00Z",
-    modifiedSystemIp: "192.168.1.1",
-    remarks: "European operations",
-    status: "active",
-  },
-  {
-    countryId: 3,
-    code: "IN",
-    countryName: "India",
-    createdBy: "admin",
-    createdDate: "2024-01-17T09:15:00Z",
-    createdSystemIp: "192.168.1.1",
-    isDeletedValue: false,
-    modifiedBy: "admin",
-    modifiedDate: "2024-01-17T09:15:00Z",
-    modifiedSystemIp: "192.168.1.1",
-    remarks: "Asia-Pacific hub",
-    status: "active",
-  },
-];
 
 export default function Country() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
-  const [countryToDelete, setCountryToDelete] = useState<CountryData | null>(null);
-  const { toast } = useToast();
+  const [selectedCountry, setSelectedCountry] = useState<CountryMasterDTO | null>(null);
+  const [countryToDelete, setCountryToDelete] = useState<CountryMasterDTO | null>(null);
+
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 0, size: 10 });
+
+  // API hooks
+  const { data: countriesResponse, isLoading, error } = useCountries(
+    { page: pagination.page, size: pagination.size, sort: [] },
+    searchQuery || undefined
+  );
+
+  const createMutation = useCreateCountry();
+  const updateMutation = useUpdateCountry();
+  const deleteMutation = useDeleteCountry();
+
+  const countries = countriesResponse?.data || [];
 
   // Add country form
   const addCountryForm = useForm<CountryFormValues>({
@@ -133,83 +97,81 @@ export default function Country() {
   });
 
   const onAddCountrySubmit = (data: CountryFormValues) => {
-    console.log("Adding country:", data);
-    toast({
-      title: "Country Created",
-      description: `Country "${data.countryName}" (${data.code}) has been successfully created.`,
+    createMutation.mutate({
+      code: data.code,
+      countryName: data.countryName,
+      status: data.status,
+      remarks: data.remarks,
     });
     setIsAddDialogOpen(false);
     addCountryForm.reset();
   };
 
   const onEditCountrySubmit = (data: CountryFormValues) => {
-    console.log("Updating country:", data);
-    toast({
-      title: "Country Updated",
-      description: `Country "${data.countryName}" (${data.code}) has been successfully updated.`,
-    });
+    if (selectedCountry) {
+      updateMutation.mutate({
+        id: selectedCountry.countryId!,
+        data: {
+          countryId: selectedCountry.countryId,
+          code: data.code,
+          countryName: data.countryName,
+          status: data.status,
+          remarks: data.remarks,
+        },
+      });
+    }
     setIsEditDialogOpen(false);
     setSelectedCountry(null);
     editCountryForm.reset();
   };
 
-  const handleEditCountry = (country: CountryData) => {
+  const handleEditCountry = (country: CountryMasterDTO) => {
     setSelectedCountry(country);
     editCountryForm.reset({
-      code: country.code,
-      countryName: country.countryName,
-      status: country.status as "active" | "inactive",
-      remarks: country.remarks,
+      code: country.code || "",
+      countryName: country.countryName || "",
+      status: (country.status as "active" | "inactive") || "active",
+      remarks: country.remarks || "",
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteClick = (country: CountryData) => {
+  const handleDeleteClick = (country: CountryMasterDTO) => {
     setCountryToDelete(country);
     setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = () => {
     if (countryToDelete) {
-      console.log("Deleting country:", countryToDelete.countryId);
-      toast({
-        title: "Country Deleted",
-        description: `Country "${countryToDelete.countryName}" has been permanently deleted.`,
-        variant: "destructive",
-      });
+      deleteMutation.mutate(countryToDelete.countryId!);
       setIsDeleteDialogOpen(false);
       setCountryToDelete(null);
     }
   };
 
+  const filteredCountries = countries.filter(country =>
+    country.countryName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    country.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    country.remarks?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const getStatusBadgeClass = (status: string) => {
     return status === "active" ? "bg-green-500" : "bg-muted text-muted-foreground";
   };
 
-  const filteredCountries = countriesData.filter(country =>
-    country.countryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    country.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   // Define table columns
-  const columns = useMemo<ColumnDef<CountryData>[]>(
+  const columns = useMemo<ColumnDef<CountryMasterDTO>[]>(
     () => [
       {
-        header: "Country Code",
-        accessorKey: "code",
-        cell: (country) => (
-          <div className="font-mono font-semibold text-primary">
-            {country.code}
-          </div>
-        ),
-      },
-      {
-        header: "Country Name",
+        header: "Country",
         accessorKey: "countryName",
         cell: (country) => (
           <div className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{country.countryName}</span>
+            <span className="text-lg">🏳️</span>
+            <div>
+              <div className="font-semibold">{country.countryName || "N/A"}</div>
+              <div className="text-sm text-muted-foreground">{country.code || "N/A"}</div>
+            </div>
           </div>
         ),
       },
@@ -217,8 +179,8 @@ export default function Country() {
         header: "Status",
         accessorKey: "status",
         cell: (country) => (
-          <Badge className={getStatusBadgeClass(country.status)}>
-            {country.status.toUpperCase()}
+          <Badge className={getStatusBadgeClass(country.status || "")}>
+            {(country.status || "INACTIVE").toUpperCase()}
           </Badge>
         ),
       },
@@ -226,17 +188,8 @@ export default function Country() {
         header: "Remarks",
         accessorKey: "remarks",
         cell: (country) => (
-          <div className="max-w-xs truncate text-sm text-muted-foreground">
-            {country.remarks || "—"}
-          </div>
-        ),
-      },
-      {
-        header: "Created Date",
-        accessorKey: "createdDate",
-        cell: (country) => (
-          <div className="text-sm">
-            {new Date(country.createdDate).toLocaleDateString()}
+          <div className="max-w-xs truncate text-sm">
+            {country.remarks || "No remarks"}
           </div>
         ),
       },
@@ -245,29 +198,106 @@ export default function Country() {
         sortable: false,
         className: "text-right",
         cell: (country) => (
-          <div className="flex items-center justify-end gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleEditCountry(country)}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleDeleteClick(country)}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditCountry(country)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(country)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
     []
+  );
+
+  const CountryFormFields = ({ form }: { form: any }) => (
+    <>
+      {/* Country Code */}
+      <FormField
+        control={form.control}
+        name="code"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Country Code *</FormLabel>
+            <FormControl>
+              <Input placeholder="US, UK, CA" {...field} className="uppercase" />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* Country Name */}
+      <FormField
+        control={form.control}
+        name="countryName"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Country Name *</FormLabel>
+            <FormControl>
+              <Input placeholder="United States" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* Status */}
+      <FormField
+        control={form.control}
+        name="status"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Status *</FormLabel>
+            <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* Remarks */}
+      <FormField
+        control={form.control}
+        name="remarks"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Remarks</FormLabel>
+            <FormControl>
+              <Textarea
+                placeholder="Additional notes about this country..."
+                {...field}
+                rows={3}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
   );
 
   return (
@@ -282,10 +312,10 @@ export default function Country() {
                   Country Management
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                  Manage countries for your fleet operations
+                  Manage countries and their operational status
                 </p>
               </div>
-              
+
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-primary to-secondary">
@@ -293,93 +323,17 @@ export default function Country() {
                     Add Country
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl bg-background">
+                <DialogContent className="max-w-md bg-background">
                   <DialogHeader>
                     <DialogTitle>Add New Country</DialogTitle>
                     <DialogDescription>
-                      Create a new country for fleet operations
+                      Create a new country with operational status
                     </DialogDescription>
                   </DialogHeader>
-                  
+
                   <Form {...addCountryForm}>
                     <form onSubmit={addCountryForm.handleSubmit(onAddCountrySubmit)} className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Country Code */}
-                        <FormField
-                          control={addCountryForm.control}
-                          name="code"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Country Code *</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="US, UK, IN" 
-                                  {...field}
-                                  onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        {/* Country Name */}
-                        <FormField
-                          control={addCountryForm.control}
-                          name="countryName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Country Name *</FormLabel>
-                              <FormControl>
-                                <Input placeholder="United States" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        {/* Status */}
-                        <FormField
-                          control={addCountryForm.control}
-                          name="status"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Status *</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger className="bg-background">
-                                    <SelectValue placeholder="Select status" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="bg-background">
-                                  <SelectItem value="active">Active</SelectItem>
-                                  <SelectItem value="inactive">Inactive</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      {/* Remarks */}
-                      <FormField
-                        control={addCountryForm.control}
-                        name="remarks"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Remarks</FormLabel>
-                            <FormControl>
-                              <Textarea 
-                                placeholder="Additional information about this country..." 
-                                {...field} 
-                                rows={3}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <CountryFormFields form={addCountryForm} />
 
                       <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -394,152 +348,91 @@ export default function Country() {
                 </DialogContent>
               </Dialog>
             </div>
-          </div>
 
-          {/* Search */}
-          <div className="mb-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {/* Search Bar */}
+            <div className="relative mt-6">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search countries by name or code..."
+                placeholder="Search by country name, code, or remarks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 bg-card border-border"
               />
             </div>
           </div>
 
-          {/* Countries DataTable */}
-          <div className="animate-in fade-in slide-in-from-bottom-8 duration-900">
-            <DataTable
-              data={filteredCountries}
-              columns={columns}
-            />
+          {/* Countries Table */}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-destructive">Error loading countries</p>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
+            ) : (
+              <DataTable
+                data={filteredCountries}
+                columns={columns}
+                pageSize={pagination.size}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                currentPage={pagination.page}
+              />
+            )}
           </div>
+
+          {/* Edit Country Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-md bg-background">
+              <DialogHeader>
+                <DialogTitle>Edit Country</DialogTitle>
+                <DialogDescription>
+                  Update country information and status
+                </DialogDescription>
+              </DialogHeader>
+
+              <Form {...editCountryForm}>
+                <form onSubmit={editCountryForm.handleSubmit(onEditCountrySubmit)} className="space-y-4">
+                  <CountryFormFields form={editCountryForm} />
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                      Update Country
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="bg-background">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the country "{countryToDelete?.countryName}".
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl bg-background">
-          <DialogHeader>
-            <DialogTitle>Edit Country</DialogTitle>
-            <DialogDescription>
-              Update country information
-            </DialogDescription>
-          </DialogHeader>
-          
-          <Form {...editCountryForm}>
-            <form onSubmit={editCountryForm.handleSubmit(onEditCountrySubmit)} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Country Code */}
-                <FormField
-                  control={editCountryForm.control}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country Code *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="US, UK, IN" 
-                          {...field}
-                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Country Name */}
-                <FormField
-                  control={editCountryForm.control}
-                  name="countryName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country Name *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="United States" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Status */}
-                <FormField
-                  control={editCountryForm.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background">
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Remarks */}
-              <FormField
-                control={editCountryForm.control}
-                name="remarks"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Remarks</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Additional information about this country..." 
-                        {...field} 
-                        rows={3}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
-                  Update Country
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="bg-background">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the country
-              <span className="font-semibold text-foreground"> "{countryToDelete?.countryName}" ({countryToDelete?.code})</span> from the system.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </DashboardLayout>
   );
 }

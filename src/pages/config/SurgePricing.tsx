@@ -1,729 +1,639 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, ColumnDef } from "@/components/DataTable";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { TrendingUp, Search, Plus, Edit, Trash2, Car, MapPin, Clock, MoreHorizontal } from "lucide-react";
+import { useState, useMemo } from "react";
 import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { DataTable, ColumnDef } from "@/components/DataTable";
+import {
+  useSurgePricingList,
+  useActiveVehicleCategoriesList,
+  useCitiesList,
+  useCreateSurgePricing,
+  useUpdateSurgePricing,
+  useDeleteSurgePricing,
+  useToggleSurgePricingStatus,
+  SurgePricingDTO,
+  VehicleCategoryDTO,
+  CityMasterDTO
+} from "@/services/queryService";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-// Types
-interface LocalTime {
-  hour: number;
-  minute: number;
-  second?: number;
-  nano?: number;
-}
-
-interface CityMaster {
-  cityId: number;
-  cityName: string;
-  code: string;
-  state: {
-    stateId: number;
-    stateName: string;
-    country: {
-      countryId: number;
-      countryName: string;
-    };
-  };
-}
-
-interface SurgePricingData {
-  surgeRuleId: number;
-  vehicleCategoryId: number;
-  vehicleCategoryName: string;
-  city: CityMaster;
-  startTime: LocalTime;
-  endTime: LocalTime;
-  surgeMultiplier: number;
-  dayOfWeek: string;
-  maxSurgeCap: number;
-  isActive: boolean;
-  createdBy: string;
-  createdDate: string;
-  isDeletedValue: boolean;
-  modifiedBy?: string;
-  modifiedDate?: string;
-}
-
-// Mock data
-const mockCountries = [
-  { countryId: 1, countryName: "United States", code: "US" },
-  { countryId: 2, countryName: "Canada", code: "CA" },
-  { countryId: 3, countryName: "United Kingdom", code: "UK" },
-];
-
-const mockStates = [
-  { stateId: 1, stateName: "California", code: "CA", countryId: 1 },
-  { stateId: 2, stateName: "Texas", code: "TX", countryId: 1 },
-  { stateId: 3, stateName: "Ontario", code: "ON", countryId: 2 },
-  { stateId: 4, stateName: "England", code: "EN", countryId: 3 },
-];
-
-const mockCities = [
-  { cityId: 1, cityName: "Los Angeles", code: "LA", stateId: 1 },
-  { cityId: 2, cityName: "San Francisco", code: "SF", stateId: 1 },
-  { cityId: 3, cityName: "Houston", code: "HOU", stateId: 2 },
-  { cityId: 4, cityName: "Toronto", code: "TOR", stateId: 3 },
-];
-
-const mockVehicleCategories = [
-  { vehicleCategoryId: 1, vehicleCategoryName: "Economy" },
-  { vehicleCategoryId: 2, vehicleCategoryName: "Comfort" },
-  { vehicleCategoryId: 3, vehicleCategoryName: "Premium" },
-  { vehicleCategoryId: 4, vehicleCategoryName: "SUV" },
-];
-
-const daysOfWeek = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY", "ALL"];
-
-// Form validation schema
+// Validation schema for add/edit surge pricing
 const surgePricingSchema = z.object({
-  vehicleCategoryId: z.number().min(1, "Vehicle category is required"),
-  cityId: z.number().min(1, "City is required"),
-  startTime: z.object({
-    hour: z.number().min(0).max(23),
-    minute: z.number().min(0).max(59),
-  }),
-  endTime: z.object({
-    hour: z.number().min(0).max(23),
-    minute: z.number().min(0).max(59),
-  }),
-  surgeMultiplier: z.number().min(1, "Surge multiplier must be at least 1.0").max(10, "Surge multiplier cannot exceed 10.0"),
-  dayOfWeek: z.string().min(1, "Day of week is required"),
-  maxSurgeCap: z.number().min(0, "Max surge cap must be positive"),
+  vehicleCategoryId: z.number({ required_error: "Please select a vehicle category" }),
+  cityId: z.number({ required_error: "Please select a city" }),
+  startTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Invalid time format (HH:MM)" }),
+  endTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Invalid time format (HH:MM)" }),
+  surgeMultiplier: z.number()
+    .min(1, { message: "Surge multiplier must be at least 1.0" })
+    .max(10, { message: "Surge multiplier cannot exceed 10.0" }),
+  dayOfWeek: z.string({ required_error: "Please select a day" }),
+  maxSurgeCap: z.number()
+    .min(0, { message: "Max surge cap cannot be negative" })
+    .max(1000, { message: "Max surge cap too high" })
+    .optional(),
   isActive: z.boolean(),
 });
 
-type SurgePricingFormData = z.infer<typeof surgePricingSchema>;
+type SurgePricingFormValues = z.infer<typeof surgePricingSchema>;
+
+const daysOfWeek = [
+  "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
+];
 
 export default function SurgePricing() {
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedSurge, setSelectedSurge] = useState<SurgePricingData | null>(null);
+  const [selectedPricing, setSelectedPricing] = useState<SurgePricingDTO | null>(null);
+  const [pricingToDelete, setPricingToDelete] = useState<SurgePricingDTO | null>(null);
 
-  // Form state
-  const [selectedCountry, setSelectedCountry] = useState<number | null>(null);
-  const [selectedState, setSelectedState] = useState<number | null>(null);
-  const [formData, setFormData] = useState<Partial<SurgePricingFormData>>({
-    isActive: true,
-    surgeMultiplier: 1.5,
-    maxSurgeCap: 3.0,
-    dayOfWeek: "ALL",
-    startTime: { hour: 7, minute: 0 },
-    endTime: { hour: 9, minute: 0 },
-  });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 0, size: 10 });
 
-  // Mock surge pricing data
-  const [surgePricingRules] = useState<SurgePricingData[]>([
-    {
-      surgeRuleId: 1,
-      vehicleCategoryId: 1,
-      vehicleCategoryName: "Economy",
-      city: {
-        cityId: 1,
-        cityName: "Los Angeles",
-        code: "LA",
-        state: {
-          stateId: 1,
-          stateName: "California",
-          country: { countryId: 1, countryName: "United States" },
-        },
-      },
-      startTime: { hour: 7, minute: 0 },
-      endTime: { hour: 9, minute: 0 },
-      surgeMultiplier: 1.5,
-      dayOfWeek: "MONDAY",
-      maxSurgeCap: 3.0,
-      isActive: true,
-      createdBy: "admin",
-      createdDate: "2024-01-15T10:00:00",
-      isDeletedValue: false,
-    },
-    {
-      surgeRuleId: 2,
-      vehicleCategoryId: 2,
-      vehicleCategoryName: "Comfort",
-      city: {
-        cityId: 2,
-        cityName: "San Francisco",
-        code: "SF",
-        state: {
-          stateId: 1,
-          stateName: "California",
-          country: { countryId: 1, countryName: "United States" },
-        },
-      },
-      startTime: { hour: 17, minute: 0 },
-      endTime: { hour: 19, minute: 30 },
-      surgeMultiplier: 2.0,
-      dayOfWeek: "FRIDAY",
-      maxSurgeCap: 4.0,
-      isActive: true,
-      createdBy: "admin",
-      createdDate: "2024-01-16T11:30:00",
-      isDeletedValue: false,
-    },
-  ]);
-
-  // Filtered data based on search
-  const filteredSurgePricing = surgePricingRules.filter(
-    (rule) =>
-      rule.city.cityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rule.vehicleCategoryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rule.dayOfWeek.toLowerCase().includes(searchQuery.toLowerCase())
+  // API hooks
+  const { data: pricingResponse, isLoading, error } = useSurgePricingList(
+    { page: pagination.page, size: pagination.size, sort: [] },
+    searchQuery || undefined
   );
 
-  // Get filtered states and cities based on selection
-  const filteredStates = selectedCountry
-    ? mockStates.filter((state) => state.countryId === selectedCountry)
-    : [];
+  const { data: vehicleCategoriesResponse } = useActiveVehicleCategoriesList();
+  const { data: citiesResponse } = useCitiesList();
 
-  const filteredCities = selectedState
-    ? mockCities.filter((city) => city.stateId === selectedState)
-    : [];
+  const createMutation = useCreateSurgePricing();
+  const updateMutation = useUpdateSurgePricing();
+  const deleteMutation = useDeleteSurgePricing();
+  const toggleStatusMutation = useToggleSurgePricingStatus();
 
-  // Helper to format time
-  const formatTime = (time: LocalTime) => {
-    const hour = time.hour.toString().padStart(2, "0");
-    const minute = time.minute.toString().padStart(2, "0");
-    return `${hour}:${minute}`;
-  };
+  const pricingList = pricingResponse?.data || [];
+  const vehicleCategories = vehicleCategoriesResponse?.data || [];
+  const cities = citiesResponse?.data || [];
 
-  // Table columns
-  const columns: ColumnDef<SurgePricingData>[] = [
-    {
-      header: "Vehicle Category",
-      accessorKey: "vehicleCategoryName",
-    },
-    {
-      header: "City",
-      cell: (row: SurgePricingData) => (
-        <div className="flex flex-col">
-          <span className="font-medium">{row.city.cityName}</span>
-          <span className="text-xs text-muted-foreground">
-            {row.city.state.stateName}, {row.city.state.country.countryName}
-          </span>
-        </div>
-      ),
-    },
-    {
-      header: "Time Range",
-      cell: (row: SurgePricingData) => (
-        <span className="font-mono text-sm">
-          {formatTime(row.startTime)} - {formatTime(row.endTime)}
-        </span>
-      ),
-    },
-    {
-      header: "Day",
-      accessorKey: "dayOfWeek",
-      cell: (row: SurgePricingData) => (
-        <Badge variant="outline" className="font-medium">
-          {row.dayOfWeek}
-        </Badge>
-      ),
-    },
-    {
-      header: "Surge Multiplier",
-      cell: (row: SurgePricingData) => (
-        <span className="font-semibold text-primary">{row.surgeMultiplier}x</span>
-      ),
-    },
-    {
-      header: "Max Cap",
-      cell: (row: SurgePricingData) => <span>{row.maxSurgeCap}x</span>,
-    },
-    {
-      header: "Status",
-      cell: (row: SurgePricingData) => (
-        <Badge variant={row.isActive ? "default" : "secondary"}>
-          {row.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-    {
-      header: "Actions",
-      cell: (row: SurgePricingData) => (
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleEdit(row)}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDelete(row)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
-
-  const validateForm = (data: Partial<SurgePricingFormData>): boolean => {
-    try {
-      surgePricingSchema.parse(data);
-      setFormErrors({});
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const errors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path) {
-            errors[err.path.join(".")] = err.message;
-          }
-        });
-        setFormErrors(errors);
-      }
-      return false;
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      isActive: true,
+  // Add pricing form
+  const addPricingForm = useForm<SurgePricingFormValues>({
+    resolver: zodResolver(surgePricingSchema),
+    defaultValues: {
+      vehicleCategoryId: undefined,
+      cityId: undefined,
+      startTime: "08:00",
+      endTime: "10:00",
       surgeMultiplier: 1.5,
-      maxSurgeCap: 3.0,
-      dayOfWeek: "ALL",
-      startTime: { hour: 7, minute: 0 },
-      endTime: { hour: 9, minute: 0 },
+      dayOfWeek: "MONDAY",
+      maxSurgeCap: 100,
+      isActive: true,
+    },
+  });
+
+  // Edit pricing form
+  const editPricingForm = useForm<SurgePricingFormValues>({
+    resolver: zodResolver(surgePricingSchema),
+    defaultValues: {
+      vehicleCategoryId: undefined,
+      cityId: undefined,
+      startTime: "08:00",
+      endTime: "10:00",
+      surgeMultiplier: 1.5,
+      dayOfWeek: "MONDAY",
+      maxSurgeCap: 100,
+      isActive: true,
+    },
+  });
+
+  const timeToString = (time?: { hour?: number; minute?: number }) => {
+    if (!time) return "00:00";
+    const hour = time.hour || 0;
+    const minute = time.minute || 0;
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  };
+
+  const onAddPricingSubmit = (data: SurgePricingFormValues) => {
+    const selectedVehicleCategory = vehicleCategories.find(v => v.vehicleCategoryId === data.vehicleCategoryId);
+    const selectedCity = cities.find(c => c.cityId === data.cityId);
+
+    const [startHour, startMinute] = data.startTime.split(':').map(Number);
+    const [endHour, endMinute] = data.endTime.split(':').map(Number);
+
+    createMutation.mutate({
+      vehicleCategoryId: data.vehicleCategoryId,
+      city: selectedCity,
+      startTime: { hour: startHour, minute: startMinute, second: 0, nano: 0 },
+      endTime: { hour: endHour, minute: endMinute, second: 0, nano: 0 },
+      surgeMultiplier: data.surgeMultiplier,
+      dayOfWeek: data.dayOfWeek,
+      maxSurgeCap: data.maxSurgeCap,
+      isActive: data.isActive,
     });
-    setSelectedCountry(null);
-    setSelectedState(null);
-    setFormErrors({});
+    setIsAddDialogOpen(false);
+    addPricingForm.reset();
   };
 
-  const handleAdd = () => {
-    setIsAddDialogOpen(true);
-    resetForm();
+  const onEditPricingSubmit = (data: SurgePricingFormValues) => {
+    if (selectedPricing) {
+      const selectedVehicleCategory = vehicleCategories.find(v => v.vehicleCategoryId === data.vehicleCategoryId);
+      const selectedCity = cities.find(c => c.cityId === data.cityId);
+
+      const [startHour, startMinute] = data.startTime.split(':').map(Number);
+      const [endHour, endMinute] = data.endTime.split(':').map(Number);
+
+      updateMutation.mutate({
+        id: selectedPricing.surgeRuleId!,
+        data: {
+          surgeRuleId: selectedPricing.surgeRuleId,
+          vehicleCategoryId: data.vehicleCategoryId,
+          city: selectedCity,
+          startTime: { hour: startHour, minute: startMinute, second: 0, nano: 0 },
+          endTime: { hour: endHour, minute: endMinute, second: 0, nano: 0 },
+          surgeMultiplier: data.surgeMultiplier,
+          dayOfWeek: data.dayOfWeek,
+          maxSurgeCap: data.maxSurgeCap,
+          isActive: data.isActive,
+        },
+      });
+    }
+    setIsEditDialogOpen(false);
+    setSelectedPricing(null);
+    editPricingForm.reset();
   };
 
-  const handleEdit = (surge: SurgePricingData) => {
-    setSelectedSurge(surge);
-    setSelectedCountry(surge.city.state.country.countryId);
-    setSelectedState(surge.city.state.stateId);
-    setFormData({
-      vehicleCategoryId: surge.vehicleCategoryId,
-      cityId: surge.city.cityId,
-      startTime: surge.startTime,
-      endTime: surge.endTime,
-      surgeMultiplier: surge.surgeMultiplier,
-      dayOfWeek: surge.dayOfWeek,
-      maxSurgeCap: surge.maxSurgeCap,
-      isActive: surge.isActive,
+  const handleEditPricing = (pricing: SurgePricingDTO) => {
+    setSelectedPricing(pricing);
+    editPricingForm.reset({
+      vehicleCategoryId: pricing.vehicleCategoryId || undefined,
+      cityId: pricing.city?.cityId || undefined,
+      startTime: timeToString(pricing.startTime),
+      endTime: timeToString(pricing.endTime),
+      surgeMultiplier: pricing.surgeMultiplier || 1.5,
+      dayOfWeek: pricing.dayOfWeek || "MONDAY",
+      maxSurgeCap: pricing.maxSurgeCap || 100,
+      isActive: pricing.isActive ?? true,
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleDelete = (surge: SurgePricingData) => {
-    setSelectedSurge(surge);
+  const handleDeleteClick = (pricing: SurgePricingDTO) => {
+    setPricingToDelete(pricing);
     setIsDeleteDialogOpen(true);
   };
 
-  const handleSaveAdd = () => {
-    if (validateForm(formData as SurgePricingFormData)) {
-      toast({
-        title: "Success",
-        description: "Surge pricing rule created successfully",
-      });
-      setIsAddDialogOpen(false);
-      resetForm();
+  const handleDeleteConfirm = () => {
+    if (pricingToDelete) {
+      deleteMutation.mutate(pricingToDelete.surgeRuleId!);
+      setIsDeleteDialogOpen(false);
+      setPricingToDelete(null);
     }
   };
 
-  const handleSaveEdit = () => {
-    if (validateForm(formData as SurgePricingFormData)) {
-      toast({
-        title: "Success",
-        description: "Surge pricing rule updated successfully",
-      });
-      setIsEditDialogOpen(false);
-      setSelectedSurge(null);
-      resetForm();
-    }
+  const handleToggleStatus = (pricing: SurgePricingDTO) => {
+    toggleStatusMutation.mutate(pricing.surgeRuleId!);
   };
 
-  const handleConfirmDelete = () => {
-    toast({
-      title: "Success",
-      description: "Surge pricing rule deleted successfully",
-    });
-    setIsDeleteDialogOpen(false);
-    setSelectedSurge(null);
+  const filteredPricing = pricingList.filter(pricing =>
+    pricing.city?.cityName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pricing.city?.state?.stateName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pricing.city?.country?.countryName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pricing.dayOfWeek?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const getStatusBadgeClass = (status: boolean) => {
+    return status ? "bg-green-500" : "bg-muted text-muted-foreground";
   };
 
-  const renderFormFields = () => (
-    <div className="grid gap-4 py-4">
+  // Define table columns
+  const columns = useMemo<ColumnDef<SurgePricingDTO>[]>(
+    () => [
+      {
+        header: "Location",
+        accessorKey: "city",
+        cell: (pricing) => (
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <div className="font-semibold">{pricing.city?.cityName || "N/A"}</div>
+              <div className="text-xs text-muted-foreground">
+                {pricing.city?.state?.stateName}, {pricing.city?.country?.countryName}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: "Day",
+        accessorKey: "dayOfWeek",
+        cell: (pricing) => (
+          <Badge variant="outline">
+            {pricing.dayOfWeek || "N/A"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Time Range",
+        sortable: false,
+        cell: (pricing) => (
+          <div className="flex items-center gap-1 text-sm">
+            <Clock className="h-3 w-3 text-muted-foreground" />
+            <span>{timeToString(pricing.startTime)} - {timeToString(pricing.endTime)}</span>
+          </div>
+        ),
+      },
+      {
+        header: "Multiplier",
+        accessorKey: "surgeMultiplier",
+        cell: (pricing) => (
+          <div className="flex items-center gap-1 font-semibold text-orange-500">
+            <TrendingUp className="h-3 w-3" />
+            {pricing.surgeMultiplier?.toFixed(1)}x
+          </div>
+        ),
+      },
+      {
+        header: "Max Cap",
+        accessorKey: "maxSurgeCap",
+        cell: (pricing) => (
+          <div className="text-sm text-muted-foreground">
+            ${(pricing.maxSurgeCap || 0).toFixed(2)}
+          </div>
+        ),
+      },
+      {
+        header: "Status",
+        accessorKey: "isActive",
+        cell: (pricing) => (
+          <Badge className={getStatusBadgeClass(pricing.isActive ?? false)}>
+            {pricing.isActive ? "ACTIVE" : "INACTIVE"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Actions",
+        sortable: false,
+        className: "text-right",
+        cell: (pricing) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditPricing(pricing)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleToggleStatus(pricing)}>
+                <Switch className="h-4 w-4 mr-2" />
+                {pricing.isActive ? "Deactivate" : "Activate"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(pricing)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    []
+  );
+
+  const SurgePricingFormFields = ({ form }: { form: any }) => (
+    <>
       {/* Vehicle Category */}
-      <div className="grid gap-2">
-        <Label htmlFor="vehicleCategory">Vehicle Category *</Label>
-        <Select
-          value={formData.vehicleCategoryId?.toString()}
-          onValueChange={(value) =>
-            setFormData({ ...formData, vehicleCategoryId: parseInt(value) })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select vehicle category" />
-          </SelectTrigger>
-          <SelectContent>
-            {mockVehicleCategories.map((category) => (
-              <SelectItem key={category.vehicleCategoryId} value={category.vehicleCategoryId.toString()}>
-                {category.vehicleCategoryName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {formErrors.vehicleCategoryId && (
-          <p className="text-sm text-destructive">{formErrors.vehicleCategoryId}</p>
+      <FormField
+        control={form.control}
+        name="vehicleCategoryId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Vehicle Category *</FormLabel>
+            <Select onValueChange={(value) => field.onChange(Number(value))} defaultValue={field.value?.toString()}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vehicle category" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {vehicleCategories.map((category) => (
+                  <SelectItem key={category.vehicleId} value={category.vehicleCategoryId!.toString()}>
+                    {category.vehicleCategoryName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
         )}
-      </div>
+      />
 
-      {/* Country Selection */}
-      <div className="grid gap-2">
-        <Label htmlFor="country">Country *</Label>
-        <Select
-          value={selectedCountry?.toString()}
-          onValueChange={(value) => {
-            setSelectedCountry(parseInt(value));
-            setSelectedState(null);
-            setFormData({ ...formData, cityId: undefined });
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select country" />
-          </SelectTrigger>
-          <SelectContent>
-            {mockCountries.map((country) => (
-              <SelectItem key={country.countryId} value={country.countryId.toString()}>
-                {country.countryName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* State Selection */}
-      <div className="grid gap-2">
-        <Label htmlFor="state">State *</Label>
-        <Select
-          value={selectedState?.toString()}
-          onValueChange={(value) => {
-            setSelectedState(parseInt(value));
-            setFormData({ ...formData, cityId: undefined });
-          }}
-          disabled={!selectedCountry}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select state" />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredStates.map((state) => (
-              <SelectItem key={state.stateId} value={state.stateId.toString()}>
-                {state.stateName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* City Selection */}
-      <div className="grid gap-2">
-        <Label htmlFor="city">City *</Label>
-        <Select
-          value={formData.cityId?.toString()}
-          onValueChange={(value) =>
-            setFormData({ ...formData, cityId: parseInt(value) })
-          }
-          disabled={!selectedState}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select city" />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredCities.map((city) => (
-              <SelectItem key={city.cityId} value={city.cityId.toString()}>
-                {city.cityName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {formErrors.cityId && (
-          <p className="text-sm text-destructive">{formErrors.cityId}</p>
+      {/* City */}
+      <FormField
+        control={form.control}
+        name="cityId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>City *</FormLabel>
+            <Select onValueChange={(value) => field.onChange(Number(value))} defaultValue={field.value?.toString()}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {cities.map((city) => (
+                  <SelectItem key={city.cityId} value={city.cityId!.toString()}>
+                    {city.cityName}, {city.state?.stateName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
         )}
-      </div>
+      />
 
-      {/* Day of Week */}
-      <div className="grid gap-2">
-        <Label htmlFor="dayOfWeek">Day of Week *</Label>
-        <Select
-          value={formData.dayOfWeek}
-          onValueChange={(value) =>
-            setFormData({ ...formData, dayOfWeek: value })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select day" />
-          </SelectTrigger>
-          <SelectContent>
-            {daysOfWeek.map((day) => (
-              <SelectItem key={day} value={day}>
-                {day}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {formErrors.dayOfWeek && (
-          <p className="text-sm text-destructive">{formErrors.dayOfWeek}</p>
-        )}
-      </div>
-
-      {/* Time Range */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="startTime">Start Time *</Label>
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              min="0"
-              max="23"
-              placeholder="HH"
-              value={formData.startTime?.hour ?? ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  startTime: { ...formData.startTime!, hour: parseInt(e.target.value) || 0 },
-                })
-              }
-              className="w-20"
-            />
-            <span className="self-center">:</span>
-            <Input
-              type="number"
-              min="0"
-              max="59"
-              placeholder="MM"
-              value={formData.startTime?.minute ?? ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  startTime: { ...formData.startTime!, minute: parseInt(e.target.value) || 0 },
-                })
-              }
-              className="w-20"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="endTime">End Time *</Label>
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              min="0"
-              max="23"
-              placeholder="HH"
-              value={formData.endTime?.hour ?? ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  endTime: { ...formData.endTime!, hour: parseInt(e.target.value) || 0 },
-                })
-              }
-              className="w-20"
-            />
-            <span className="self-center">:</span>
-            <Input
-              type="number"
-              min="0"
-              max="59"
-              placeholder="MM"
-              value={formData.endTime?.minute ?? ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  endTime: { ...formData.endTime!, minute: parseInt(e.target.value) || 0 },
-                })
-              }
-              className="w-20"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Surge Multiplier */}
-      <div className="grid gap-2">
-        <Label htmlFor="surgeMultiplier">Surge Multiplier (1.0 - 10.0) *</Label>
-        <Input
-          id="surgeMultiplier"
-          type="number"
-          step="0.1"
-          min="1"
-          max="10"
-          placeholder="1.5"
-          value={formData.surgeMultiplier ?? ""}
-          onChange={(e) =>
-            setFormData({ ...formData, surgeMultiplier: parseFloat(e.target.value) || 1.0 })
-          }
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Day of Week */}
+        <FormField
+          control={form.control}
+          name="dayOfWeek"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Day *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select day" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {daysOfWeek.map((day) => (
+                    <SelectItem key={day} value={day}>
+                      {day}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {formErrors.surgeMultiplier && (
-          <p className="text-sm text-destructive">{formErrors.surgeMultiplier}</p>
-        )}
-      </div>
 
-      {/* Max Surge Cap */}
-      <div className="grid gap-2">
-        <Label htmlFor="maxSurgeCap">Max Surge Cap *</Label>
-        <Input
-          id="maxSurgeCap"
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="3.0"
-          value={formData.maxSurgeCap ?? ""}
-          onChange={(e) =>
-            setFormData({ ...formData, maxSurgeCap: parseFloat(e.target.value) || 0 })
-          }
+        {/* Start Time */}
+        <FormField
+          control={form.control}
+          name="startTime"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Start Time *</FormLabel>
+              <FormControl>
+                <Input type="time" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {formErrors.maxSurgeCap && (
-          <p className="text-sm text-destructive">{formErrors.maxSurgeCap}</p>
-        )}
+
+        {/* End Time */}
+        <FormField
+          control={form.control}
+          name="endTime"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>End Time *</FormLabel>
+              <FormControl>
+                <Input type="time" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
       </div>
 
-      {/* Active Status */}
-      <div className="grid gap-2">
-        <Label htmlFor="isActive">Status *</Label>
-        <Select
-          value={formData.isActive ? "true" : "false"}
-          onValueChange={(value) =>
-            setFormData({ ...formData, isActive: value === "true" })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="true">Active</SelectItem>
-            <SelectItem value="false">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Surge Multiplier */}
+        <FormField
+          control={form.control}
+          name="surgeMultiplier"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Surge Multiplier *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="10"
+                  placeholder="1.5"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Multiplier for pricing during surge (1.0x - 10.0x)</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Max Surge Cap */}
+        <FormField
+          control={form.control}
+          name="maxSurgeCap"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Max Surge Cap ($)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="100"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Maximum surge charge allowed</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
       </div>
-    </div>
+
+      {/* Is Active */}
+      <FormField
+        control={form.control}
+        name="isActive"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <FormLabel className="text-base">Active Status</FormLabel>
+              <FormDescription>
+                Enable this surge pricing rule
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+    </>
   );
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Surge Pricing</h1>
-          <p className="text-muted-foreground">Manage dynamic pricing based on demand</p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="container px-4 py-8">
+          <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <CardTitle>Surge Pricing Rules</CardTitle>
-                <CardDescription>Configure time-based surge multipliers and peak hour pricing</CardDescription>
+                <h2 className="text-3xl font-bold flex items-center gap-2">
+                  <TrendingUp className="h-8 w-8 text-primary" />
+                  Surge Pricing Management
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  Manage dynamic pricing rules for peak demand periods
+                </p>
               </div>
-              <Button onClick={handleAdd}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Rule
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Search */}
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by city, vehicle category, or day..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
+
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-primary to-secondary">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Surge Pricing
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background">
+                  <DialogHeader>
+                    <DialogTitle>Add New Surge Pricing Rule</DialogTitle>
+                    <DialogDescription>
+                      Set up surge pricing for specific times and days
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <Form {...addPricingForm}>
+                    <form onSubmit={addPricingForm.handleSubmit(onAddPricingSubmit)} className="space-y-4">
+                      <SurgePricingFormFields form={addPricingForm} />
+
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                          Create Surge Pricing
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
             </div>
 
-            {/* Table */}
-            <DataTable columns={columns} data={filteredSurgePricing} />
-          </CardContent>
-        </Card>
+            {/* Search Bar */}
+            <div className="relative mt-6">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search by city, state, country, or day..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-card border-border"
+              />
+            </div>
+          </div>
+
+          {/* Surge Pricing Table */}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-destructive">Error loading surge pricing</p>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
+            ) : (
+              <DataTable
+                data={filteredPricing}
+                columns={columns}
+                pageSize={pagination.size}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                currentPage={pagination.page}
+              />
+            )}
+          </div>
+
+          {/* Edit Surge Pricing Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background">
+              <DialogHeader>
+                <DialogTitle>Edit Surge Pricing</DialogTitle>
+                <DialogDescription>
+                  Update surge pricing rule
+                </DialogDescription>
+              </DialogHeader>
+
+              <Form {...editPricingForm}>
+                <form onSubmit={editPricingForm.handleSubmit(onEditPricingSubmit)} className="space-y-4">
+                  <SurgePricingFormFields form={editPricingForm} />
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                      Update Surge Pricing
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="bg-background">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the surge pricing rule for "{pricingToDelete?.city?.cityName}".
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
-
-      {/* Add Dialog */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add Surge Pricing Rule</DialogTitle>
-            <DialogDescription>
-              Create a new surge pricing rule with time-based multipliers
-            </DialogDescription>
-          </DialogHeader>
-          {renderFormFields()}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveAdd}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Surge Pricing Rule</DialogTitle>
-            <DialogDescription>
-              Update the surge pricing rule configuration
-            </DialogDescription>
-          </DialogHeader>
-          {renderFormFields()}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveEdit}>Update</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete the surge pricing rule for{" "}
-              <span className="font-semibold">{selectedSurge?.vehicleCategoryName}</span> in{" "}
-              <span className="font-semibold">{selectedSurge?.city.cityName}</span> on{" "}
-              <span className="font-semibold">{selectedSurge?.dayOfWeek}</span>.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDelete}>Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </DashboardLayout>
   );
 }

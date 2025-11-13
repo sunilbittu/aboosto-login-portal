@@ -1,34 +1,16 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
-import { DataTable, ColumnDef } from "@/components/DataTable";
-import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { DollarSign, Search, Plus, Edit, Trash2, Car, MapPin, MoreHorizontal } from "lucide-react";
+import { useState, useMemo } from "react";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import {
   Form,
   FormControl,
@@ -36,1147 +18,660 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
+import { DataTable, ColumnDef } from "@/components/DataTable";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+  useBasePricingList,
+  useActiveVehicleCategoriesList,
+  useCitiesList,
+  useCreateBasePricing,
+  useUpdateBasePricing,
+  useDeleteBasePricing,
+  useToggleBasePricingStatus,
+  BasePricingDTO,
+  VehicleCategoryDTO,
+  CityMasterDTO
+} from "@/services/queryService";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-// Types
-interface CountryData {
-  countryId: number;
-  code: string;
-  countryName: string;
-  status: string;
-  remarks: string;
-  createdDate: string;
-}
-
-interface StateData {
-  stateId: number;
-  code: string;
-  stateName: string;
-  country: CountryData;
-  status: string;
-  remarks: string;
-  createdDate: string;
-}
-
-interface CityData {
-  cityId: number;
-  code: string;
-  cityName: string;
-  state: StateData;
-  status: string;
-  remarks: string;
-  createdDate: string;
-}
-
-interface VehicleCategoryData {
-  vehicleCategoryId: number;
-  vehicleCategoryName: string;
-  vehicleDescription: string;
-  baseFare: number;
-  ratePerKm: number;
-  ratePerMinute: number;
-  isActive: boolean;
-}
-
-interface BasePricingData {
-  pricingId: number;
-  vehicleCategoryId: number;
-  vehicleCategoryName: string;
-  city: CityData;
-  baseFare: number;
-  ratePerKm: number;
-  ratePerMinute: number;
-  minimumFare: number;
-  nightCharges: number;
-  tollFeeApplicable: boolean;
-  isActive: boolean;
-  createdBy: string;
-  createdDate: string;
-}
-
-// Form schema
-const formSchema = z.object({
-  vehicleCategoryId: z.string().min(1, "Vehicle category is required"),
-  countryId: z.string().min(1, "Country is required"),
-  stateId: z.string().min(1, "State is required"),
-  cityId: z.string().min(1, "City is required"),
-  baseFare: z.string().min(1, "Base fare is required"),
-  ratePerKm: z.string().min(1, "Rate per km is required"),
-  ratePerMinute: z.string().min(1, "Rate per minute is required"),
-  minimumFare: z.string().min(1, "Minimum fare is required"),
-  nightCharges: z.string().min(1, "Night charges is required"),
-  tollFeeApplicable: z.boolean().default(false),
-  isActive: z.boolean().default(true),
+// Validation schema for add/edit base pricing
+const basePricingSchema = z.object({
+  vehicleCategoryId: z.number({ required_error: "Please select a vehicle category" }),
+  cityId: z.number({ required_error: "Please select a city" }),
+  baseFare: z.number()
+    .min(0, { message: "Base fare cannot be negative" })
+    .max(10000, { message: "Base fare too high" }),
+  ratePerKm: z.number()
+    .min(0, { message: "Rate per km cannot be negative" })
+    .max(1000, { message: "Rate per km too high" }),
+  ratePerMinute: z.number()
+    .min(0, { message: "Rate per minute cannot be negative" })
+    .max(100, { message: "Rate per minute too high" }),
+  minimumFare: z.number()
+    .min(0, { message: "Minimum fare cannot be negative" })
+    .max(1000, { message: "Minimum fare too high" })
+    .optional(),
+  nightCharges: z.number()
+    .min(0, { message: "Night charges cannot be negative" })
+    .max(500, { message: "Night charges too high" })
+    .optional(),
+  tollFeeApplicable: z.boolean(),
+  isActive: z.boolean(),
 });
 
+type BasePricingFormValues = z.infer<typeof basePricingSchema>;
+
 export default function BasePricing() {
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedPricing, setSelectedPricing] = useState<BasePricingData | null>(null);
+  const [selectedPricing, setSelectedPricing] = useState<BasePricingDTO | null>(null);
+  const [pricingToDelete, setPricingToDelete] = useState<BasePricingDTO | null>(null);
 
-  // Mock data
-  const [pricingData, setPricingData] = useState<BasePricingData[]>([
-    {
-      pricingId: 1,
-      vehicleCategoryId: 1,
-      vehicleCategoryName: "Sedan",
-      city: {
-        cityId: 1,
-        code: "NYC",
-        cityName: "New York",
-        state: {
-          stateId: 1,
-          code: "NY",
-          stateName: "New York",
-          country: {
-            countryId: 1,
-            code: "US",
-            countryName: "United States",
-            status: "Active",
-            remarks: "",
-            createdDate: "2024-01-01",
-          },
-          status: "Active",
-          remarks: "",
-          createdDate: "2024-01-01",
-        },
-        status: "Active",
-        remarks: "",
-        createdDate: "2024-01-01",
-      },
-      baseFare: 5.0,
-      ratePerKm: 1.5,
-      ratePerMinute: 0.3,
-      minimumFare: 8.0,
-      nightCharges: 2.0,
-      tollFeeApplicable: true,
-      isActive: true,
-      createdBy: "admin",
-      createdDate: "2024-01-15",
-    },
-    {
-      pricingId: 2,
-      vehicleCategoryId: 2,
-      vehicleCategoryName: "SUV",
-      city: {
-        cityId: 1,
-        code: "NYC",
-        cityName: "New York",
-        state: {
-          stateId: 1,
-          code: "NY",
-          stateName: "New York",
-          country: {
-            countryId: 1,
-            code: "US",
-            countryName: "United States",
-            status: "Active",
-            remarks: "",
-            createdDate: "2024-01-01",
-          },
-          status: "Active",
-          remarks: "",
-          createdDate: "2024-01-01",
-        },
-        status: "Active",
-        remarks: "",
-        createdDate: "2024-01-01",
-      },
-      baseFare: 8.0,
-      ratePerKm: 2.0,
-      ratePerMinute: 0.4,
-      minimumFare: 12.0,
-      nightCharges: 3.0,
-      tollFeeApplicable: true,
-      isActive: true,
-      createdBy: "admin",
-      createdDate: "2024-01-15",
-    },
-  ]);
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 0, size: 10 });
 
-  const [countries] = useState<CountryData[]>([
-    {
-      countryId: 1,
-      code: "US",
-      countryName: "United States",
-      status: "Active",
-      remarks: "",
-      createdDate: "2024-01-01",
-    },
-    {
-      countryId: 2,
-      code: "UK",
-      countryName: "United Kingdom",
-      status: "Active",
-      remarks: "",
-      createdDate: "2024-01-01",
-    },
-  ]);
+  // API hooks
+  const { data: pricingResponse, isLoading, error } = useBasePricingList(
+    { page: pagination.page, size: pagination.size, sort: [] },
+    searchQuery || undefined
+  );
 
-  const [states] = useState<StateData[]>([
-    {
-      stateId: 1,
-      code: "NY",
-      stateName: "New York",
-      country: countries[0],
-      status: "Active",
-      remarks: "",
-      createdDate: "2024-01-01",
-    },
-    {
-      stateId: 2,
-      code: "CA",
-      stateName: "California",
-      country: countries[0],
-      status: "Active",
-      remarks: "",
-      createdDate: "2024-01-01",
-    },
-  ]);
+  const { data: vehicleCategoriesResponse } = useActiveVehicleCategoriesList();
+  const { data: citiesResponse } = useCitiesList();
 
-  const [cities] = useState<CityData[]>([
-    {
-      cityId: 1,
-      code: "NYC",
-      cityName: "New York",
-      state: states[0],
-      status: "Active",
-      remarks: "",
-      createdDate: "2024-01-01",
-    },
-    {
-      cityId: 2,
-      code: "LA",
-      cityName: "Los Angeles",
-      state: states[1],
-      status: "Active",
-      remarks: "",
-      createdDate: "2024-01-01",
-    },
-  ]);
+  const createMutation = useCreateBasePricing();
+  const updateMutation = useUpdateBasePricing();
+  const deleteMutation = useDeleteBasePricing();
+  const toggleStatusMutation = useToggleBasePricingStatus();
 
-  const [vehicleCategories] = useState<VehicleCategoryData[]>([
-    {
-      vehicleCategoryId: 1,
-      vehicleCategoryName: "Sedan",
-      vehicleDescription: "Standard sedan car",
-      baseFare: 5.0,
-      ratePerKm: 1.5,
-      ratePerMinute: 0.3,
-      isActive: true,
-    },
-    {
-      vehicleCategoryId: 2,
-      vehicleCategoryName: "SUV",
-      vehicleDescription: "Sport utility vehicle",
-      baseFare: 8.0,
-      ratePerKm: 2.0,
-      ratePerMinute: 0.4,
-      isActive: true,
-    },
-  ]);
+  const pricingList = pricingResponse?.data || [];
+  const vehicleCategories = vehicleCategoriesResponse?.data || [];
+  const cities = citiesResponse?.data || [];
 
-  const addForm = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  // Add pricing form
+  const addPricingForm = useForm<BasePricingFormValues>({
+    resolver: zodResolver(basePricingSchema),
     defaultValues: {
-      vehicleCategoryId: "",
-      countryId: "",
-      stateId: "",
-      cityId: "",
-      baseFare: "",
-      ratePerKm: "",
-      ratePerMinute: "",
-      minimumFare: "",
-      nightCharges: "",
+      vehicleCategoryId: undefined,
+      cityId: undefined,
+      baseFare: 0,
+      ratePerKm: 0,
+      ratePerMinute: 0,
+      minimumFare: 0,
+      nightCharges: 0,
       tollFeeApplicable: false,
       isActive: true,
     },
   });
 
-  const editForm = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  // Edit pricing form
+  const editPricingForm = useForm<BasePricingFormValues>({
+    resolver: zodResolver(basePricingSchema),
+    defaultValues: {
+      vehicleCategoryId: undefined,
+      cityId: undefined,
+      baseFare: 0,
+      ratePerKm: 0,
+      ratePerMinute: 0,
+      minimumFare: 0,
+      nightCharges: 0,
+      tollFeeApplicable: false,
+      isActive: true,
+    },
   });
 
-  const columns: ColumnDef<BasePricingData>[] = [
-    {
-      header: "Pricing ID",
-      accessorKey: "pricingId",
-    },
-    {
-      header: "Vehicle Category",
-      accessorKey: "vehicleCategoryName",
-    },
-    {
-      header: "City",
-      accessorKey: "city",
-      cell: (row) => row.city.cityName,
-    },
-    {
-      header: "State",
-      accessorKey: "city",
-      cell: (row) => row.city.state.stateName,
-    },
-    {
-      header: "Country",
-      accessorKey: "city",
-      cell: (row) => row.city.state.country.countryName,
-    },
-    {
-      header: "Base Fare",
-      accessorKey: "baseFare",
-      cell: (row) => `$${row.baseFare.toFixed(2)}`,
-    },
-    {
-      header: "Rate/Km",
-      accessorKey: "ratePerKm",
-      cell: (row) => `$${row.ratePerKm.toFixed(2)}`,
-    },
-    {
-      header: "Rate/Min",
-      accessorKey: "ratePerMinute",
-      cell: (row) => `$${row.ratePerMinute.toFixed(2)}`,
-    },
-    {
-      header: "Min Fare",
-      accessorKey: "minimumFare",
-      cell: (row) => `$${row.minimumFare.toFixed(2)}`,
-    },
-    {
-      header: "Night Charges",
-      accessorKey: "nightCharges",
-      cell: (row) => `$${row.nightCharges.toFixed(2)}`,
-    },
-    {
-      header: "Toll Fee",
-      accessorKey: "tollFeeApplicable",
-      cell: (row) => (
-        <Badge variant={row.tollFeeApplicable ? "default" : "secondary"}>
-          {row.tollFeeApplicable ? "Yes" : "No"}
-        </Badge>
-      ),
-    },
-    {
-      header: "Status",
-      accessorKey: "isActive",
-      cell: (row) => (
-        <Badge variant={row.isActive ? "default" : "secondary"}>
-          {row.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-    {
-      header: "Created Date",
-      accessorKey: "createdDate",
-    },
-    {
-      header: "Actions",
-      cell: (row) => (
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleEdit(row)}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDeleteClick(row)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  const onAddPricingSubmit = (data: BasePricingFormValues) => {
+    const selectedVehicleCategory = vehicleCategories.find(v => v.vehicleCategoryId === data.vehicleCategoryId);
+    const selectedCity = cities.find(c => c.cityId === data.cityId);
 
-  const filteredData = pricingData.filter(
-    (pricing) =>
-      pricing.vehicleCategoryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pricing.city.cityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pricing.city.state.stateName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pricing.city.state.country.countryName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleAdd = (values: z.infer<typeof formSchema>) => {
-    const selectedCity = cities.find((c) => c.cityId === parseInt(values.cityId));
-    const selectedCategory = vehicleCategories.find(
-      (vc) => vc.vehicleCategoryId === parseInt(values.vehicleCategoryId)
-    );
-
-    if (!selectedCity || !selectedCategory) return;
-
-    const newPricing: BasePricingData = {
-      pricingId: Math.max(...pricingData.map((p) => p.pricingId), 0) + 1,
-      vehicleCategoryId: parseInt(values.vehicleCategoryId),
-      vehicleCategoryName: selectedCategory.vehicleCategoryName,
+    createMutation.mutate({
+      vehicleCategoryId: data.vehicleCategoryId,
       city: selectedCity,
-      baseFare: parseFloat(values.baseFare),
-      ratePerKm: parseFloat(values.ratePerKm),
-      ratePerMinute: parseFloat(values.ratePerMinute),
-      minimumFare: parseFloat(values.minimumFare),
-      nightCharges: parseFloat(values.nightCharges),
-      tollFeeApplicable: values.tollFeeApplicable,
-      isActive: values.isActive,
-      createdBy: "admin",
-      createdDate: new Date().toISOString().split("T")[0],
-    };
-
-    setPricingData([...pricingData, newPricing]);
-    setIsAddDialogOpen(false);
-    addForm.reset();
-    toast({
-      title: "Success",
-      description: "Base pricing added successfully",
+      baseFare: data.baseFare,
+      ratePerKm: data.ratePerKm,
+      ratePerMinute: data.ratePerMinute,
+      minimumFare: data.minimumFare,
+      nightCharges: data.nightCharges,
+      tollFeeApplicable: data.tollFeeApplicable,
+      isActive: data.isActive,
     });
+    setIsAddDialogOpen(false);
+    addPricingForm.reset();
   };
 
-  const handleEdit = (pricing: BasePricingData) => {
+  const onEditPricingSubmit = (data: BasePricingFormValues) => {
+    if (selectedPricing) {
+      const selectedVehicleCategory = vehicleCategories.find(v => v.vehicleCategoryId === data.vehicleCategoryId);
+      const selectedCity = cities.find(c => c.cityId === data.cityId);
+
+      updateMutation.mutate({
+        id: selectedPricing.pricingId!,
+        data: {
+          pricingId: selectedPricing.pricingId,
+          vehicleCategoryId: data.vehicleCategoryId,
+          city: selectedCity,
+          baseFare: data.baseFare,
+          ratePerKm: data.ratePerKm,
+          ratePerMinute: data.ratePerMinute,
+          minimumFare: data.minimumFare,
+          nightCharges: data.nightCharges,
+          tollFeeApplicable: data.tollFeeApplicable,
+          isActive: data.isActive,
+        },
+      });
+    }
+    setIsEditDialogOpen(false);
+    setSelectedPricing(null);
+    editPricingForm.reset();
+  };
+
+  const handleEditPricing = (pricing: BasePricingDTO) => {
     setSelectedPricing(pricing);
-    editForm.reset({
-      vehicleCategoryId: pricing.vehicleCategoryId.toString(),
-      countryId: pricing.city.state.country.countryId.toString(),
-      stateId: pricing.city.state.stateId.toString(),
-      cityId: pricing.city.cityId.toString(),
-      baseFare: pricing.baseFare.toString(),
-      ratePerKm: pricing.ratePerKm.toString(),
-      ratePerMinute: pricing.ratePerMinute.toString(),
-      minimumFare: pricing.minimumFare.toString(),
-      nightCharges: pricing.nightCharges.toString(),
-      tollFeeApplicable: pricing.tollFeeApplicable,
-      isActive: pricing.isActive,
+    editPricingForm.reset({
+      vehicleCategoryId: pricing.vehicleCategoryId || undefined,
+      cityId: pricing.city?.cityId || undefined,
+      baseFare: pricing.baseFare || 0,
+      ratePerKm: pricing.ratePerKm || 0,
+      ratePerMinute: pricing.ratePerMinute || 0,
+      minimumFare: pricing.minimumFare || 0,
+      nightCharges: pricing.nightCharges || 0,
+      tollFeeApplicable: pricing.tollFeeApplicable || false,
+      isActive: pricing.isActive ?? true,
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = (values: z.infer<typeof formSchema>) => {
-    if (!selectedPricing) return;
-
-    const selectedCity = cities.find((c) => c.cityId === parseInt(values.cityId));
-    const selectedCategory = vehicleCategories.find(
-      (vc) => vc.vehicleCategoryId === parseInt(values.vehicleCategoryId)
-    );
-
-    if (!selectedCity || !selectedCategory) return;
-
-    const updatedData = pricingData.map((pricing) =>
-      pricing.pricingId === selectedPricing.pricingId
-        ? {
-            ...pricing,
-            vehicleCategoryId: parseInt(values.vehicleCategoryId),
-            vehicleCategoryName: selectedCategory.vehicleCategoryName,
-            city: selectedCity,
-            baseFare: parseFloat(values.baseFare),
-            ratePerKm: parseFloat(values.ratePerKm),
-            ratePerMinute: parseFloat(values.ratePerMinute),
-            minimumFare: parseFloat(values.minimumFare),
-            nightCharges: parseFloat(values.nightCharges),
-            tollFeeApplicable: values.tollFeeApplicable,
-            isActive: values.isActive,
-          }
-        : pricing
-    );
-
-    setPricingData(updatedData);
-    setIsEditDialogOpen(false);
-    setSelectedPricing(null);
-    toast({
-      title: "Success",
-      description: "Base pricing updated successfully",
-    });
-  };
-
-  const handleDeleteClick = (pricing: BasePricingData) => {
-    setSelectedPricing(pricing);
+  const handleDeleteClick = (pricing: BasePricingDTO) => {
+    setPricingToDelete(pricing);
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDelete = () => {
-    if (!selectedPricing) return;
-
-    setPricingData(pricingData.filter((p) => p.pricingId !== selectedPricing.pricingId));
-    setIsDeleteDialogOpen(false);
-    setSelectedPricing(null);
-    toast({
-      title: "Success",
-      description: "Base pricing deleted successfully",
-    });
+  const handleDeleteConfirm = () => {
+    if (pricingToDelete) {
+      deleteMutation.mutate(pricingToDelete.pricingId!);
+      setIsDeleteDialogOpen(false);
+      setPricingToDelete(null);
+    }
   };
 
-  const [selectedCountryForAdd, setSelectedCountryForAdd] = useState<string>("");
-  const [selectedStateForAdd, setSelectedStateForAdd] = useState<string>("");
-  const [selectedCountryForEdit, setSelectedCountryForEdit] = useState<string>("");
-  const [selectedStateForEdit, setSelectedStateForEdit] = useState<string>("");
+  const handleToggleStatus = (pricing: BasePricingDTO) => {
+    toggleStatusMutation.mutate(pricing.pricingId!);
+  };
 
-  const filteredStatesForAdd = states.filter(
-    (state) => state.country.countryId === parseInt(selectedCountryForAdd)
+  const filteredPricing = pricingList.filter(pricing =>
+    pricing.city?.cityName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pricing.city?.state?.stateName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    pricing.city?.country?.countryName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredCitiesForAdd = cities.filter(
-    (city) => city.state.stateId === parseInt(selectedStateForAdd)
+  const getStatusBadgeClass = (status: boolean) => {
+    return status ? "bg-green-500" : "bg-muted text-muted-foreground";
+  };
+
+  // Define table columns
+  const columns = useMemo<ColumnDef<BasePricingDTO>[]>(
+    () => [
+      {
+        header: "Location",
+        accessorKey: "city",
+        cell: (pricing) => (
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <div className="font-semibold">{pricing.city?.cityName || "N/A"}</div>
+              <div className="text-xs text-muted-foreground">
+                {pricing.city?.state?.stateName}, {pricing.city?.country?.countryName}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: "Base Fare",
+        accessorKey: "baseFare",
+        cell: (pricing) => (
+          <div className="flex items-center gap-1 font-semibold text-primary">
+            <DollarSign className="h-3 w-3" />
+            {(pricing.baseFare || 0).toFixed(2)}
+          </div>
+        ),
+      },
+      {
+        header: "Rate/Km",
+        accessorKey: "ratePerKm",
+        cell: (pricing) => (
+          <div className="text-sm">
+            ${(pricing.ratePerKm || 0).toFixed(2)}
+          </div>
+        ),
+      },
+      {
+        header: "Rate/Min",
+        accessorKey: "ratePerMinute",
+        cell: (pricing) => (
+          <div className="text-sm">
+            ${(pricing.ratePerMinute || 0).toFixed(2)}
+          </div>
+        ),
+      },
+      {
+        header: "Min. Fare",
+        accessorKey: "minimumFare",
+        cell: (pricing) => (
+          <div className="text-sm text-muted-foreground">
+            ${(pricing.minimumFare || 0).toFixed(2)}
+          </div>
+        ),
+      },
+      {
+        header: "Night Charges",
+        accessorKey: "nightCharges",
+        cell: (pricing) => (
+          <div className="text-sm text-muted-foreground">
+            ${(pricing.nightCharges || 0).toFixed(2)}
+          </div>
+        ),
+      },
+      {
+        header: "Toll Fee",
+        accessorKey: "tollFeeApplicable",
+        cell: (pricing) => (
+          <Badge className={pricing.tollFeeApplicable ? "bg-blue-500" : "bg-muted text-muted-foreground"}>
+            {pricing.tollFeeApplicable ? "APPLICABLE" : "NOT APPLICABLE"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Status",
+        accessorKey: "isActive",
+        cell: (pricing) => (
+          <Badge className={getStatusBadgeClass(pricing.isActive ?? false)}>
+            {pricing.isActive ? "ACTIVE" : "INACTIVE"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Actions",
+        sortable: false,
+        className: "text-right",
+        cell: (pricing) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditPricing(pricing)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleToggleStatus(pricing)}>
+                <Switch className="h-4 w-4 mr-2" />
+                {pricing.isActive ? "Deactivate" : "Activate"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(pricing)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    []
   );
 
-  const filteredStatesForEdit = states.filter(
-    (state) => state.country.countryId === parseInt(selectedCountryForEdit)
-  );
+  const BasePricingFormFields = ({ form }: { form: any }) => (
+    <>
+      {/* Vehicle Category */}
+      <FormField
+        control={form.control}
+        name="vehicleCategoryId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Vehicle Category *</FormLabel>
+            <Select onValueChange={(value) => field.onChange(Number(value))} defaultValue={field.value?.toString()}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select vehicle category" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {vehicleCategories.map((category) => (
+                  <SelectItem key={category.vehicleId} value={category.vehicleCategoryId!.toString()}>
+                    {category.vehicleCategoryName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
-  const filteredCitiesForEdit = cities.filter(
-    (city) => city.state.stateId === parseInt(selectedStateForEdit)
+      {/* City */}
+      <FormField
+        control={form.control}
+        name="cityId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>City *</FormLabel>
+            <Select onValueChange={(value) => field.onChange(Number(value))} defaultValue={field.value?.toString()}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {cities.map((city) => (
+                  <SelectItem key={city.cityId} value={city.cityId!.toString()}>
+                    {city.cityName}, {city.state?.stateName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Base Fare */}
+        <FormField
+          control={form.control}
+          name="baseFare"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Base Fare ($) *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="50.00"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Initial charge for the ride</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Rate Per Km */}
+        <FormField
+          control={form.control}
+          name="ratePerKm"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Rate per Km ($) *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="10.00"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Charge per kilometer</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Rate Per Minute */}
+        <FormField
+          control={form.control}
+          name="ratePerMinute"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Rate per Minute ($) *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="2.00"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Charge per minute</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Minimum Fare */}
+        <FormField
+          control={form.control}
+          name="minimumFare"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Minimum Fare ($)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="25.00"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Minimum charge for any ride</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Night Charges */}
+        <FormField
+          control={form.control}
+          name="nightCharges"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Night Charges ($)</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="5.00"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Additional night time charges</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Toll Fee Applicable */}
+        <FormField
+          control={form.control}
+          name="tollFeeApplicable"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Toll Fee</FormLabel>
+                <FormDescription>
+                  Apply toll fees to rides
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* Is Active */}
+      <FormField
+        control={form.control}
+        name="isActive"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <FormLabel className="text-base">Active Status</FormLabel>
+              <FormDescription>
+                Enable this pricing for new ride bookings
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+    </>
   );
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Base Pricing</h1>
-            <p className="text-muted-foreground">
-              Configure base pricing for your fleet services
-            </p>
-          </div>
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Base Pricing
-          </Button>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="container px-4 py-8">
+          <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-3xl font-bold flex items-center gap-2">
+                  <DollarSign className="h-8 w-8 text-primary" />
+                  Base Pricing Management
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  Manage base pricing for different vehicle categories and locations
+                </p>
+              </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Base Pricing List</CardTitle>
-            <div className="flex items-center gap-2 mt-4">
-              <Search className="h-4 w-4 text-muted-foreground" />
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-primary to-secondary">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Base Pricing
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background">
+                  <DialogHeader>
+                    <DialogTitle>Add New Base Pricing</DialogTitle>
+                    <DialogDescription>
+                      Set up base pricing for a vehicle category in a specific location
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <Form {...addPricingForm}>
+                    <form onSubmit={addPricingForm.handleSubmit(onAddPricingSubmit)} className="space-y-4">
+                      <BasePricingFormFields form={addPricingForm} />
+
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                          Create Base Pricing
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative mt-6">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search by vehicle category, city, state, or country..."
+                placeholder="Search by city, state, or country..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="max-w-sm"
+                className="pl-10 bg-card border-border"
               />
             </div>
-          </CardHeader>
-          <CardContent>
-            <DataTable columns={columns} data={filteredData} />
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Add Dialog */}
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Add Base Pricing</DialogTitle>
-              <DialogDescription>
-                Add a new base pricing configuration
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...addForm}>
-              <form onSubmit={addForm.handleSubmit(handleAdd)} className="space-y-4">
-                <FormField
-                  control={addForm.control}
-                  name="vehicleCategoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vehicle Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select vehicle category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {vehicleCategories.map((category) => (
-                            <SelectItem
-                              key={category.vehicleCategoryId}
-                              value={category.vehicleCategoryId.toString()}
-                            >
-                              {category.vehicleCategoryName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          {/* Base Pricing Table */}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-destructive">Error loading base pricing</p>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
+            ) : (
+              <DataTable
+                data={filteredPricing}
+                columns={columns}
+                pageSize={pagination.size}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                currentPage={pagination.page}
+              />
+            )}
+          </div>
 
-                <FormField
-                  control={addForm.control}
-                  name="countryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setSelectedCountryForAdd(value);
-                          addForm.setValue("stateId", "");
-                          addForm.setValue("cityId", "");
-                          setSelectedStateForAdd("");
-                        }}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select country" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {countries.map((country) => (
-                            <SelectItem
-                              key={country.countryId}
-                              value={country.countryId.toString()}
-                            >
-                              {country.countryName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          {/* Edit Base Pricing Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background">
+              <DialogHeader>
+                <DialogTitle>Edit Base Pricing</DialogTitle>
+                <DialogDescription>
+                  Update base pricing information
+                </DialogDescription>
+              </DialogHeader>
 
-                <FormField
-                  control={addForm.control}
-                  name="stateId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setSelectedStateForAdd(value);
-                          addForm.setValue("cityId", "");
-                        }}
-                        defaultValue={field.value}
-                        disabled={!selectedCountryForAdd}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select state" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {filteredStatesForAdd.map((state) => (
-                            <SelectItem
-                              key={state.stateId}
-                              value={state.stateId.toString()}
-                            >
-                              {state.stateName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <Form {...editPricingForm}>
+                <form onSubmit={editPricingForm.handleSubmit(onEditPricingSubmit)} className="space-y-4">
+                  <BasePricingFormFields form={editPricingForm} />
 
-                <FormField
-                  control={addForm.control}
-                  name="cityId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>City</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        disabled={!selectedStateForAdd}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select city" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {filteredCitiesForAdd.map((city) => (
-                            <SelectItem
-                              key={city.cityId}
-                              value={city.cityId.toString()}
-                            >
-                              {city.cityName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                      Update Base Pricing
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={addForm.control}
-                    name="baseFare"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Base Fare ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={addForm.control}
-                    name="ratePerKm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Rate Per Km ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={addForm.control}
-                    name="ratePerMinute"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Rate Per Minute ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={addForm.control}
-                    name="minimumFare"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Minimum Fare ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={addForm.control}
-                    name="nightCharges"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Night Charges ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={addForm.control}
-                  name="tollFeeApplicable"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Toll Fee Applicable</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={addForm.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Active</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit">Add Pricing</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Base Pricing</DialogTitle>
-              <DialogDescription>
-                Update the base pricing configuration
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...editForm}>
-              <form onSubmit={editForm.handleSubmit(handleUpdate)} className="space-y-4">
-                <FormField
-                  control={editForm.control}
-                  name="vehicleCategoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vehicle Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select vehicle category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {vehicleCategories.map((category) => (
-                            <SelectItem
-                              key={category.vehicleCategoryId}
-                              value={category.vehicleCategoryId.toString()}
-                            >
-                              {category.vehicleCategoryName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={editForm.control}
-                  name="countryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setSelectedCountryForEdit(value);
-                          editForm.setValue("stateId", "");
-                          editForm.setValue("cityId", "");
-                          setSelectedStateForEdit("");
-                        }}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select country" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {countries.map((country) => (
-                            <SelectItem
-                              key={country.countryId}
-                              value={country.countryId.toString()}
-                            >
-                              {country.countryName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={editForm.control}
-                  name="stateId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setSelectedStateForEdit(value);
-                          editForm.setValue("cityId", "");
-                        }}
-                        defaultValue={field.value}
-                        disabled={!selectedCountryForEdit}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select state" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {filteredStatesForEdit.map((state) => (
-                            <SelectItem
-                              key={state.stateId}
-                              value={state.stateId.toString()}
-                            >
-                              {state.stateName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={editForm.control}
-                  name="cityId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>City</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                        disabled={!selectedStateForEdit}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select city" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {filteredCitiesForEdit.map((city) => (
-                            <SelectItem
-                              key={city.cityId}
-                              value={city.cityId.toString()}
-                            >
-                              {city.cityName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={editForm.control}
-                    name="baseFare"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Base Fare ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="ratePerKm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Rate Per Km ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="ratePerMinute"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Rate Per Minute ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="minimumFare"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Minimum Fare ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={editForm.control}
-                    name="nightCharges"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Night Charges ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={editForm.control}
-                  name="tollFeeApplicable"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Toll Fee Applicable</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={editForm.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Active</FormLabel>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsEditDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit">Update Pricing</Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Dialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will delete the base pricing for{" "}
-                <span className="font-semibold">
-                  {selectedPricing?.vehicleCategoryName}
-                </span>{" "}
-                in{" "}
-                <span className="font-semibold">
-                  {selectedPricing?.city.cityName}
-                </span>
-                . This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="bg-background">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the base pricing for "{pricingToDelete?.city?.cityName}".
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
     </DashboardLayout>
   );

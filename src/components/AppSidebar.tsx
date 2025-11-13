@@ -1,9 +1,9 @@
-import { 
-  LayoutDashboard, 
-  Users, 
-  Shield, 
-  Lock, 
-  Car, 
+import {
+  LayoutDashboard,
+  Users,
+  Shield,
+  Lock,
+  Car,
   Truck,
   ChevronDown,
   Settings,
@@ -15,7 +15,7 @@ import {
   Gift,
   UserPlus,
   AlertCircle,
-  Navigation
+  Navigation,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -45,7 +45,7 @@ const mainItems = [
 ];
 
 const adminItems = [
-  { title: "Users", url: "/admin/users", icon: Users },
+  { title: "Users", url: "/admin/list", icon: Users },
   { title: "Roles", url: "/admin/roles", icon: Shield },
   { title: "Permissions", url: "/admin/permissions", icon: Lock },
   { title: "Riders", url: "/admin/riders", icon: Car },
@@ -76,10 +76,7 @@ export function AppSidebar() {
   const isConfigSectionActive = configItems.some((item) => isActive(item.url));
 
   return (
-    <Sidebar 
-      className={collapsed ? "w-14" : "w-60"}
-      collapsible="icon"
-    >
+    <Sidebar className={collapsed ? "w-14" : "w-60"} collapsible="icon">
       <SidebarContent className="bg-card border-r border-border">
         {/* Main Navigation */}
         <SidebarGroup>
@@ -91,9 +88,9 @@ export function AppSidebar() {
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink 
-                      to={item.url} 
-                      end 
+                    <NavLink
+                      to={item.url}
+                      end
                       className="hover:bg-accent"
                       activeClassName="bg-accent text-accent-foreground font-medium"
                     >
@@ -108,10 +105,17 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Admin Management */}
-        <Collapsible defaultOpen={isAdminSectionActive} className="group/collapsible">
+        <Collapsible
+          defaultOpen={isAdminSectionActive}
+          className="group/collapsible"
+        >
           <SidebarGroup>
             <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className={`flex items-center justify-between w-full hover:bg-accent rounded-md transition-colors ${collapsed ? "hidden" : ""}`}>
+              <CollapsibleTrigger
+                className={`flex items-center justify-between w-full hover:bg-accent rounded-md transition-colors ${
+                  collapsed ? "hidden" : ""
+                }`}
+              >
                 <span>Admin Management</span>
                 <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
@@ -122,7 +126,7 @@ export function AppSidebar() {
                   {adminItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                        <NavLink 
+                        <NavLink
                           to={item.url}
                           className="hover:bg-accent pl-4"
                           activeClassName="bg-accent text-accent-foreground font-medium"
@@ -140,10 +144,17 @@ export function AppSidebar() {
         </Collapsible>
 
         {/* Configuration Management */}
-        <Collapsible defaultOpen={isConfigSectionActive} className="group/collapsible">
+        <Collapsible
+          defaultOpen={isConfigSectionActive}
+          className="group/collapsible"
+        >
           <SidebarGroup>
             <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className={`flex items-center justify-between w-full hover:bg-accent rounded-md transition-colors ${collapsed ? "hidden" : ""}`}>
+              <CollapsibleTrigger
+                className={`flex items-center justify-between w-full hover:bg-accent rounded-md transition-colors ${
+                  collapsed ? "hidden" : ""
+                }`}
+              >
                 <span>Configuration Management</span>
                 <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
               </CollapsibleTrigger>
@@ -154,7 +165,7 @@ export function AppSidebar() {
                   {configItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                        <NavLink 
+                        <NavLink
                           to={item.url}
                           className="hover:bg-accent pl-4"
                           activeClassName="bg-accent text-accent-foreground font-medium"
