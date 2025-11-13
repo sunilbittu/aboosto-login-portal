@@ -9,9 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Users as UsersIcon, Search, UserPlus, Mail, Shield, Phone, Calendar, Edit, User, Lock, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Users as UsersIcon, Search, UserPlus, Mail, Shield, Phone, Calendar, Edit, User, Lock, Trash2, MoreHorizontal } from "lucide-react";
 import { useState, useMemo } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,6 +25,17 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { DataTable, ColumnDef } from "@/components/DataTable";
+import {
+  useAdminUsers,
+  useCreateAdminUser,
+  useUpdateAdminUser,
+  useDeleteAdminUser,
+  useToggleAdminUserStatus,
+  AppUserVO,
+  UserCreateDTO,
+  UserUpdateDTO
+} from "@/services/queryService";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // User roles enum matching AppUserVO
 const USER_ROLES = {
@@ -33,33 +44,18 @@ const USER_ROLES = {
   USER: "ROLE_USER"
 } as const;
 
-// Type for user data
-type UserData = {
-  id: number;
-  userName: string;
-  firstName: string;
-  lastName: string;
-  contactName: string;
-  email: string;
-  contactNumber: string;
-  roles: string[];
-  lastLoginDate: string;
-  isGoogleAccount: boolean;
-  activated: boolean;
-};
+type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES];
 
-// Validation schema for adding a new user
-const addUserSchema = z.object({
+// Validation schema for add/edit user
+const userSchema = z.object({
   userName: z.string()
     .trim()
     .min(3, { message: "Username must be at least 3 characters" })
-    .max(50, { message: "Username must be less than 50 characters" })
-    .regex(/^[a-zA-Z0-9_]+$/, { message: "Username can only contain letters, numbers, and underscores" }),
+    .max(50, { message: "Username must be less than 50 characters" }),
   password: z.string()
-    .min(8, { message: "Password must be at least 8 characters" })
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-      message: "Password must contain at least one uppercase letter, one lowercase letter, and one number"
-    }),
+    .min(6, { message: "Password must be at least 6 characters" })
+    .max(100, { message: "Password must be less than 100 characters" })
+    .optional(),
   firstName: z.string()
     .trim()
     .min(2, { message: "First name must be at least 2 characters" })
@@ -68,140 +64,51 @@ const addUserSchema = z.object({
     .trim()
     .min(2, { message: "Last name must be at least 2 characters" })
     .max(50, { message: "Last name must be less than 50 characters" }),
-  contactName: z.string()
-    .trim()
-    .min(2, { message: "Contact name must be at least 2 characters" })
-    .max(100, { message: "Contact name must be less than 100 characters" }),
   email: z.string()
     .trim()
-    .email({ message: "Invalid email address" })
-    .max(255, { message: "Email must be less than 255 characters" }),
+    .email({ message: "Please enter a valid email address" }),
   contactNumber: z.string()
     .trim()
-    .min(10, { message: "Contact number must be at least 10 digits" })
-    .max(20, { message: "Contact number must be less than 20 characters" })
-    .regex(/^[+\d\s()-]+$/, { message: "Invalid phone number format" }),
-  roles: z.array(z.string()).min(1, { message: "At least one role must be selected" }),
-  activated: z.boolean().default(true),
+    .min(10, { message: "Contact number must be at least 10 characters" })
+    .max(20, { message: "Contact number must be less than 20 characters" }),
+  roles: z.array(z.string()).min(1, { message: "Please select at least one role" }),
+  activated: z.boolean(),
 });
 
-// Validation schema for editing a user (password is optional)
-const editUserSchema = z.object({
-  userName: z.string()
-    .trim()
-    .min(3, { message: "Username must be at least 3 characters" })
-    .max(50, { message: "Username must be less than 50 characters" })
-    .regex(/^[a-zA-Z0-9_]+$/, { message: "Username can only contain letters, numbers, and underscores" }),
-  password: z.string()
-    .optional()
-    .refine((val) => !val || val.length >= 8, {
-      message: "Password must be at least 8 characters if provided"
-    })
-    .refine((val) => !val || /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(val), {
-      message: "Password must contain at least one uppercase letter, one lowercase letter, and one number if provided"
-    }),
-  firstName: z.string()
-    .trim()
-    .min(2, { message: "First name must be at least 2 characters" })
-    .max(50, { message: "First name must be less than 50 characters" }),
-  lastName: z.string()
-    .trim()
-    .min(2, { message: "Last name must be at least 2 characters" })
-    .max(50, { message: "Last name must be less than 50 characters" }),
-  contactName: z.string()
-    .trim()
-    .min(2, { message: "Contact name must be at least 2 characters" })
-    .max(100, { message: "Contact name must be less than 100 characters" }),
-  email: z.string()
-    .trim()
-    .email({ message: "Invalid email address" })
-    .max(255, { message: "Email must be less than 255 characters" }),
-  contactNumber: z.string()
-    .trim()
-    .min(10, { message: "Contact number must be at least 10 digits" })
-    .max(20, { message: "Contact number must be less than 20 characters" })
-    .regex(/^[+\d\s()-]+$/, { message: "Invalid phone number format" }),
-  roles: z.array(z.string()).min(1, { message: "At least one role must be selected" }),
-  activated: z.boolean().default(true),
-});
+type UserFormValues = z.infer<typeof userSchema>;
 
-type AddUserFormValues = z.infer<typeof addUserSchema>;
-type EditUserFormValues = z.infer<typeof editUserSchema>;
-
-// Mock data matching AppUserVO structure
-const usersData: UserData[] = [
-  { 
-    id: 1, 
-    userName: "superadmin",
-    firstName: "John", 
-    lastName: "SuperAdmin",
-    contactName: "John Super Admin",
-    email: "john@aboosto.com", 
-    contactNumber: "+234 801 234 5678",
-    roles: [USER_ROLES.SUPER_ADMIN],
-    lastLoginDate: "2025-01-10T08:30:00",
-    isGoogleAccount: false,
-    activated: true
-  },
-  { 
-    id: 2, 
-    userName: "sarah",
-    firstName: "Sarah", 
-    lastName: "Manager",
-    contactName: "Sarah Manager",
-    email: "sarah@aboosto.com", 
-    contactNumber: "+234 802 345 6789",
-    roles: [USER_ROLES.ADMIN],
-    lastLoginDate: "2025-01-09T14:20:00",
-    isGoogleAccount: true,
-    activated: true
-  },
-  { 
-    id: 3, 
-    userName: "mikestaff",
-    firstName: "Mike", 
-    lastName: "Staff",
-    contactName: "Mike Staff",
-    email: "mike@aboosto.com", 
-    contactNumber: "+234 803 456 7890",
-    roles: [USER_ROLES.USER],
-    lastLoginDate: "2025-01-08T10:15:00",
-    isGoogleAccount: false,
-    activated: true
-  },
-  { 
-    id: 4, 
-    userName: "emma",
-    firstName: "Emma", 
-    lastName: "User",
-    contactName: "Emma User",
-    email: "emma@aboosto.com", 
-    contactNumber: "+234 804 567 8901",
-    roles: [USER_ROLES.USER],
-    lastLoginDate: "2025-01-05T16:45:00",
-    isGoogleAccount: false,
-    activated: false
-  },
-];
-
-const Users = () => {
+export default function Users() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
-  const { toast } = useToast();
+  const [selectedUser, setSelectedUser] = useState<AppUserVO | null>(null);
+  const [userToDelete, setUserToDelete] = useState<AppUserVO | null>(null);
+
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 0, size: 10 });
+
+  // API hooks
+  const { data: usersResponse, isLoading, error } = useAdminUsers(
+    { page: pagination.page, size: pagination.size, sort: [] },
+    searchQuery || undefined
+  );
+
+  const createMutation = useCreateAdminUser();
+  const updateMutation = useUpdateAdminUser();
+  const deleteMutation = useDeleteAdminUser();
+  const toggleStatusMutation = useToggleAdminUserStatus();
+
+  const users = usersResponse?.data || [];
 
   // Add user form
-  const addUserForm = useForm<AddUserFormValues>({
-    resolver: zodResolver(addUserSchema),
+  const addUserForm = useForm<UserFormValues>({
+    resolver: zodResolver(userSchema),
     defaultValues: {
       userName: "",
       password: "",
       firstName: "",
       lastName: "",
-      contactName: "",
       email: "",
       contactNumber: "",
       roles: [],
@@ -210,14 +117,13 @@ const Users = () => {
   });
 
   // Edit user form
-  const editUserForm = useForm<EditUserFormValues>({
-    resolver: zodResolver(editUserSchema),
+  const editUserForm = useForm<UserFormValues>({
+    resolver: zodResolver(userSchema),
     defaultValues: {
       userName: "",
       password: "",
       firstName: "",
       lastName: "",
-      contactName: "",
       email: "",
       contactNumber: "",
       roles: [],
@@ -225,122 +131,133 @@ const Users = () => {
     },
   });
 
-  const onAddUserSubmit = (data: AddUserFormValues) => {
-    // In production, this would call an API to create the user
-    console.log("Adding user:", data);
-    toast({
-      title: "User Created",
-      description: `User ${data.userName} has been successfully created.`,
+  const onAddUserSubmit = (data: UserFormValues) => {
+    if (!data.password) {
+      addUserForm.setError("password", { message: "Password is required for new users" });
+      return;
+    }
+
+    createMutation.mutate({
+      userName: data.userName,
+      password: data.password,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      contactNumber: data.contactNumber,
+      roles: data.roles,
     });
     setIsAddDialogOpen(false);
     addUserForm.reset();
   };
 
-  const onEditUserSubmit = (data: EditUserFormValues) => {
-    // In production, this would call an API to update the user
-    console.log("Updating user:", data);
-    toast({
-      title: "User Updated",
-      description: `User ${data.userName} has been successfully updated.`,
-    });
+  const onEditUserSubmit = (data: UserFormValues) => {
+    if (selectedUser) {
+      updateMutation.mutate({
+        id: selectedUser.id,
+        data: {
+          userName: data.userName,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          contactNumber: data.contactNumber,
+          roles: data.roles,
+          activated: data.activated,
+        },
+      });
+    }
     setIsEditDialogOpen(false);
     setSelectedUser(null);
     editUserForm.reset();
   };
 
-  const handleEditUser = (user: UserData) => {
+  const handleEditUser = (user: AppUserVO) => {
     setSelectedUser(user);
     editUserForm.reset({
-      userName: user.userName,
+      userName: user.userName || "",
       password: "",
-      firstName: user.firstName,
-      lastName: user.lastName,
-      contactName: user.contactName,
-      email: user.email,
-      contactNumber: user.contactNumber,
-      roles: user.roles,
-      activated: user.activated,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      email: user.email || "",
+      contactNumber: user.contactNumber || "",
+      roles: user.roles || [],
+      activated: user.activated ?? true,
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteClick = (user: UserData) => {
+  const handleDeleteClick = (user: AppUserVO) => {
     setUserToDelete(user);
     setIsDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = () => {
     if (userToDelete) {
-      // In production, this would call an API to delete the user
-      console.log("Deleting user:", userToDelete.id);
-      toast({
-        title: "User Deleted",
-        description: `User ${userToDelete.userName} has been permanently deleted.`,
-        variant: "destructive",
-      });
+      deleteMutation.mutate(userToDelete.id);
       setIsDeleteDialogOpen(false);
       setUserToDelete(null);
     }
   };
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName[0]}${lastName[0]}`.toUpperCase();
+  const handleToggleStatus = (user: AppUserVO) => {
+    toggleStatusMutation.mutate(user.id);
   };
 
-  const getRoleBadgeVariant = (role: string) => {
-    if (role === USER_ROLES.SUPER_ADMIN) return "bg-destructive";
-    if (role === USER_ROLES.ADMIN) return "bg-gradient-to-r from-primary to-secondary";
-    return "bg-muted";
-  };
-
-  const formatRole = (role: string) => {
-    return role.replace("ROLE_", "").replace("_", " ");
-  };
-
-  const filteredUsers = usersData.filter(user =>
-    user.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.contactNumber.includes(searchQuery)
+  const filteredUsers = users.filter(user =>
+    user.userName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.contactNumber?.includes(searchQuery)
   );
 
+  const getRoleBadgeColor = (roles: string[]) => {
+    if (roles.includes(USER_ROLES.SUPER_ADMIN)) return "bg-red-500";
+    if (roles.includes(USER_ROLES.ADMIN)) return "bg-blue-500";
+    return "bg-gray-500";
+  };
+
+  const getRoleText = (roles: string[]) => {
+    if (roles.includes(USER_ROLES.SUPER_ADMIN)) return "SUPER ADMIN";
+    if (roles.includes(USER_ROLES.ADMIN)) return "ADMIN";
+    return "USER";
+  };
+
+  const getInitials = (firstName?: string, lastName?: string) => {
+    return `${firstName?.charAt(0) || ""}${lastName?.charAt(0) || ""}`.toUpperCase();
+  };
+
   // Define table columns
-  const columns = useMemo<ColumnDef<UserData>[]>(
+  const columns = useMemo<ColumnDef<AppUserVO>[]>(
     () => [
       {
         header: "User",
-        accessorKey: "contactName",
+        accessorKey: "userName",
         cell: (user) => (
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
-              <AvatarFallback className="bg-gradient-to-r from-primary to-secondary text-primary-foreground">
-                {getInitials(user.firstName, user.lastName)}
-              </AvatarFallback>
+              <AvatarFallback>{getInitials(user.firstName, user.lastName)}</AvatarFallback>
             </Avatar>
             <div>
-              <div className="font-medium flex items-center gap-2">
-                {user.contactName}
-                {user.isGoogleAccount && (
-                  <Badge variant="outline" className="text-xs">Google</Badge>
-                )}
+              <div className="font-semibold">{user.userName}</div>
+              <div className="text-sm text-muted-foreground">
+                {user.firstName} {user.lastName}
               </div>
-              <div className="text-sm text-muted-foreground">@{user.userName}</div>
             </div>
           </div>
         ),
       },
       {
         header: "Contact",
-        accessorKey: "email",
+        sortable: false,
         cell: (user) => (
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-1 text-sm">
               <Mail className="h-3 w-3 text-muted-foreground" />
-              {user.email}
+              <span>{user.email}</span>
             </div>
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-1 text-sm">
               <Phone className="h-3 w-3 text-muted-foreground" />
-              {user.contactNumber}
+              <span>{user.contactNumber}</span>
             </div>
           </div>
         ),
@@ -349,23 +266,26 @@ const Users = () => {
         header: "Roles",
         accessorKey: "roles",
         cell: (user) => (
-          <div className="flex flex-wrap gap-1">
-            {user.roles.map((role) => (
-              <Badge key={role} className={getRoleBadgeVariant(role)}>
-                <Shield className="h-3 w-3 mr-1" />
-                {formatRole(role)}
-              </Badge>
-            ))}
-          </div>
+          <Badge className={getRoleBadgeColor(user.roles || [])}>
+            {getRoleText(user.roles || [])}
+          </Badge>
+        ),
+      },
+      {
+        header: "Google Account",
+        accessorKey: "isGoogleAccount",
+        cell: (user) => (
+          <Badge variant={user.isGoogleAccount ? "default" : "secondary"}>
+            {user.isGoogleAccount ? "Yes" : "No"}
+          </Badge>
         ),
       },
       {
         header: "Last Login",
         accessorKey: "lastLoginDate",
         cell: (user) => (
-          <div className="flex items-center gap-2 text-sm">
-            <Calendar className="h-3 w-3 text-muted-foreground" />
-            <span>{new Date(user.lastLoginDate).toLocaleString()}</span>
+          <div className="text-sm">
+            {user.lastLoginDate ? new Date(user.lastLoginDate).toLocaleDateString() : "Never"}
           </div>
         ),
       },
@@ -373,13 +293,7 @@ const Users = () => {
         header: "Status",
         accessorKey: "activated",
         cell: (user) => (
-          <Badge 
-            className={
-              user.activated
-                ? "bg-green-500" 
-                : "bg-muted text-muted-foreground"
-            }
-          >
+          <Badge className={user.activated ? "bg-green-500" : "bg-muted text-muted-foreground"}>
             {user.activated ? "ACTIVE" : "INACTIVE"}
           </Badge>
         ),
@@ -389,29 +303,197 @@ const Users = () => {
         sortable: false,
         className: "text-right",
         cell: (user) => (
-          <div className="flex items-center justify-end gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleEditUser(user)}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleDeleteClick(user)}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
+                <Switch className="h-4 w-4 mr-2" />
+                {user.activated ? "Deactivate" : "Activate"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(user)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
     []
+  );
+
+  const UserFormFields = ({ form, isEdit = false }: { form: any; isEdit?: boolean }) => (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Username */}
+        <FormField
+          control={form.control}
+          name="userName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Username *</FormLabel>
+              <FormControl>
+                <Input placeholder="john_doe" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Password (only for new users) */}
+        {!isEdit && (
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Password *</FormLabel>
+                <FormControl>
+                  <Input type="password" placeholder="••••••••" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {/* First Name */}
+        <FormField
+          control={form.control}
+          name="firstName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>First Name *</FormLabel>
+              <FormControl>
+                <Input placeholder="John" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Last Name */}
+        <FormField
+          control={form.control}
+          name="lastName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Last Name *</FormLabel>
+              <FormControl>
+                <Input placeholder="Doe" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Email */}
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email *</FormLabel>
+              <FormControl>
+                <Input type="email" placeholder="john.doe@example.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Contact Number */}
+        <FormField
+          control={form.control}
+          name="contactNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contact Number *</FormLabel>
+              <FormControl>
+                <Input placeholder="+1234567890" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* Roles */}
+      <FormField
+        control={form.control}
+        name="roles"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Roles *</FormLabel>
+            <FormDescription>Select the roles for this user</FormDescription>
+            <div className="space-y-2">
+              {Object.entries(USER_ROLES).map(([key, value]) => (
+                <FormField
+                  key={value}
+                  control={form.control}
+                  name="roles"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value?.includes(value)}
+                          onCheckedChange={(checked) => {
+                            return checked
+                              ? field.onChange([...field.value, value])
+                              : field.onChange(
+                                  field.value?.filter((role) => role !== value)
+                                );
+                          }}
+                        />
+                      </FormControl>
+                      <FormLabel className="text-sm font-normal">
+                        {key.replace('_', ' ')}
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              ))}
+            </div>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* Activated Status */}
+      {isEdit && (
+        <FormField
+          control={form.control}
+          name="activated"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Active Status</FormLabel>
+                <FormDescription>
+                  Whether this user account is active
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      )}
+    </>
   );
 
   return (
@@ -426,10 +508,10 @@ const Users = () => {
                   User Management
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                  Manage system users and their access
+                  Manage system users and their access permissions
                 </p>
               </div>
-              
+
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-primary to-secondary">
@@ -441,241 +523,19 @@ const Users = () => {
                   <DialogHeader>
                     <DialogTitle>Add New User</DialogTitle>
                     <DialogDescription>
-                      Create a new user account with the specified details and roles.
+                      Create a new user account with appropriate roles
                     </DialogDescription>
                   </DialogHeader>
-                  
+
                   <Form {...addUserForm}>
-                    <form onSubmit={addUserForm.handleSubmit(onAddUserSubmit)} className="space-y-6">
-                      {/* Username */}
-                      <FormField
-                        control={addUserForm.control}
-                        name="userName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Username *</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input placeholder="username" className="pl-10" {...field} />
-                              </div>
-                            </FormControl>
-                            <FormDescription>
-                              Username can only contain letters, numbers, and underscores
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Password */}
-                      <FormField
-                        control={addUserForm.control}
-                        name="password"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Password *</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input type="password" placeholder="••••••••" className="pl-10" {...field} />
-                              </div>
-                            </FormControl>
-                            <FormDescription>
-                              Must be at least 8 characters with uppercase, lowercase, and numbers
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* First Name and Last Name */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={addUserForm.control}
-                          name="firstName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>First Name *</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <Input placeholder="John" className="pl-10" {...field} />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={addUserForm.control}
-                          name="lastName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Last Name *</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <Input placeholder="Doe" className="pl-10" {...field} />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      {/* Contact Name */}
-                      <FormField
-                        control={addUserForm.control}
-                        name="contactName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Contact Name *</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input placeholder="John Doe" className="pl-10" {...field} />
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Email and Contact Number */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={addUserForm.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email Address *</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <Input type="email" placeholder="john@example.com" className="pl-10" {...field} />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={addUserForm.control}
-                          name="contactNumber"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Contact Number *</FormLabel>
-                              <FormControl>
-                                <div className="relative">
-                                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                  <Input placeholder="+234 801 234 5678" className="pl-10" {...field} />
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      {/* Roles Selection */}
-                      <FormField
-                        control={addUserForm.control}
-                        name="roles"
-                        render={() => (
-                          <FormItem>
-                            <div className="mb-4">
-                              <FormLabel>User Roles *</FormLabel>
-                              <FormDescription>
-                                Select one or more roles for this user
-                              </FormDescription>
-                            </div>
-                            <div className="space-y-3">
-                              {Object.entries(USER_ROLES).map(([key, value]) => (
-                                <FormField
-                                  key={value}
-                                  control={addUserForm.control}
-                                  name="roles"
-                                  render={({ field }) => {
-                                    return (
-                                      <FormItem
-                                        key={value}
-                                        className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-border p-4 bg-muted/20"
-                                      >
-                                        <FormControl>
-                                          <Checkbox
-                                            checked={field.value?.includes(value)}
-                                            onCheckedChange={(checked) => {
-                                              return checked
-                                                ? field.onChange([...field.value, value])
-                                                : field.onChange(
-                                                    field.value?.filter(
-                                                      (val) => val !== value
-                                                    )
-                                                  )
-                                            }}
-                                          />
-                                        </FormControl>
-                                        <div className="space-y-1 leading-none">
-                                          <FormLabel className="flex items-center gap-2 cursor-pointer">
-                                            <Shield className="h-4 w-4 text-primary" />
-                                            <span className="font-medium">{key.replace("_", " ")}</span>
-                                          </FormLabel>
-                                          <FormDescription>
-                                            {value === USER_ROLES.SUPER_ADMIN && "Full system access with all permissions"}
-                                            {value === USER_ROLES.ADMIN && "Administrative access with most permissions"}
-                                            {value === USER_ROLES.USER && "Standard user access with limited permissions"}
-                                          </FormDescription>
-                                        </div>
-                                      </FormItem>
-                                    )
-                                  }}
-                                />
-                              ))}
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Activated Status */}
-                      <FormField
-                        control={addUserForm.control}
-                        name="activated"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-center justify-between rounded-md border border-border p-4 bg-muted/20">
-                            <div className="space-y-0.5">
-                              <FormLabel className="text-base">Activate Account</FormLabel>
-                              <FormDescription>
-                                Enable this account immediately upon creation
-                              </FormDescription>
-                            </div>
-                            <FormControl>
-                              <Switch
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+                    <form onSubmit={addUserForm.handleSubmit(onAddUserSubmit)} className="space-y-4">
+                      <UserFormFields form={addUserForm} />
 
                       <DialogFooter>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setIsAddDialogOpen(false);
-                            addUserForm.reset();
-                          }}
-                        >
+                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                           Cancel
                         </Button>
                         <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
-                          <UserPlus className="h-4 w-4 mr-2" />
                           Create User
                         </Button>
                       </DialogFooter>
@@ -684,83 +544,40 @@ const Users = () => {
                 </DialogContent>
               </Dialog>
             </div>
-          </div>
 
-          {/* Search */}
-          <div className="mb-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {/* Search Bar */}
+            <div className="relative mt-6">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search users..."
+                placeholder="Search by name, email, username, or phone..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 bg-card border-border"
               />
             </div>
           </div>
 
           {/* Users Table */}
-          <Card className="animate-in fade-in slide-in-from-bottom-8 duration-900">
-            <CardHeader>
-              <CardTitle>All Users</CardTitle>
-              <CardDescription>A list of all users in the system</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DataTable 
-                data={filteredUsers} 
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-destructive">Error loading users</p>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
+            ) : (
+              <DataTable
+                data={filteredUsers}
                 columns={columns}
-                pageSize={10}
-                pageSizeOptions={[10, 25, 50, 100]}
+                pageSize={pagination.size}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                currentPage={pagination.page}
               />
-            </CardContent>
-          </Card>
-
-          {/* Delete Confirmation Dialog */}
-          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-            <AlertDialogContent className="bg-background">
-              <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-                  <Trash2 className="h-5 w-5" />
-                  Delete User Account
-                </AlertDialogTitle>
-                <AlertDialogDescription className="space-y-3">
-                  <p>
-                    Are you sure you want to delete the user account for{" "}
-                    <span className="font-semibold text-foreground">
-                      {userToDelete?.contactName}
-                    </span>{" "}
-                    (@{userToDelete?.userName})?
-                  </p>
-                  <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-                    <p className="text-sm font-medium text-destructive">
-                      ⚠️ Warning: This action cannot be undone
-                    </p>
-                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                      <li>• All user data will be permanently deleted</li>
-                      <li>• User access will be immediately revoked</li>
-                      <li>• Associated records may be affected</li>
-                      <li>• This action is irreversible</li>
-                    </ul>
-                  </div>
-                  <p className="text-sm">
-                    Please confirm that you want to proceed with deleting this user account.
-                  </p>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setUserToDelete(null)}>
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteConfirm}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete User
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            )}
+          </div>
 
           {/* Edit User Dialog */}
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -768,242 +585,19 @@ const Users = () => {
               <DialogHeader>
                 <DialogTitle>Edit User</DialogTitle>
                 <DialogDescription>
-                  Update user account details and roles. Leave password blank to keep current password.
+                  Update user information and permissions
                 </DialogDescription>
               </DialogHeader>
-              
+
               <Form {...editUserForm}>
-                <form onSubmit={editUserForm.handleSubmit(onEditUserSubmit)} className="space-y-6">
-                  {/* Username */}
-                  <FormField
-                    control={editUserForm.control}
-                    name="userName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Username *</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="username" className="pl-10" {...field} />
-                          </div>
-                        </FormControl>
-                        <FormDescription>
-                          Username can only contain letters, numbers, and underscores
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Password (Optional) */}
-                  <FormField
-                    control={editUserForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>New Password (Optional)</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input type="password" placeholder="Leave blank to keep current password" className="pl-10" {...field} />
-                          </div>
-                        </FormControl>
-                        <FormDescription>
-                          Only fill this if you want to change the password
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* First Name and Last Name */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={editUserForm.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>First Name *</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input placeholder="John" className="pl-10" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editUserForm.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Last Name *</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input placeholder="Doe" className="pl-10" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Contact Name */}
-                  <FormField
-                    control={editUserForm.control}
-                    name="contactName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Contact Name *</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="John Doe" className="pl-10" {...field} />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Email and Contact Number */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={editUserForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email Address *</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input type="email" placeholder="john@example.com" className="pl-10" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={editUserForm.control}
-                      name="contactNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Contact Number *</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input placeholder="+234 801 234 5678" className="pl-10" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  {/* Roles Selection */}
-                  <FormField
-                    control={editUserForm.control}
-                    name="roles"
-                    render={() => (
-                      <FormItem>
-                        <div className="mb-4">
-                          <FormLabel>User Roles *</FormLabel>
-                          <FormDescription>
-                            Select one or more roles for this user
-                          </FormDescription>
-                        </div>
-                        <div className="space-y-3">
-                          {Object.entries(USER_ROLES).map(([key, value]) => (
-                            <FormField
-                              key={value}
-                              control={editUserForm.control}
-                              name="roles"
-                              render={({ field }) => {
-                                return (
-                                  <FormItem
-                                    key={value}
-                                    className="flex flex-row items-start space-x-3 space-y-0 rounded-md border border-border p-4 bg-muted/20"
-                                  >
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(value)}
-                                        onCheckedChange={(checked) => {
-                                          return checked
-                                            ? field.onChange([...field.value, value])
-                                            : field.onChange(
-                                                field.value?.filter(
-                                                  (val) => val !== value
-                                                )
-                                              )
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <div className="space-y-1 leading-none">
-                                      <FormLabel className="flex items-center gap-2 cursor-pointer">
-                                        <Shield className="h-4 w-4 text-primary" />
-                                        <span className="font-medium">{key.replace("_", " ")}</span>
-                                      </FormLabel>
-                                      <FormDescription>
-                                        {value === USER_ROLES.SUPER_ADMIN && "Full system access with all permissions"}
-                                        {value === USER_ROLES.ADMIN && "Administrative access with most permissions"}
-                                        {value === USER_ROLES.USER && "Standard user access with limited permissions"}
-                                      </FormDescription>
-                                    </div>
-                                  </FormItem>
-                                )
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {/* Activated Status */}
-                  <FormField
-                    control={editUserForm.control}
-                    name="activated"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-md border border-border p-4 bg-muted/20">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Account Status</FormLabel>
-                          <FormDescription>
-                            Enable or disable this user account
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+                <form onSubmit={editUserForm.handleSubmit(onEditUserSubmit)} className="space-y-4">
+                  <UserFormFields form={editUserForm} isEdit={true} />
 
                   <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setIsEditDialogOpen(false);
-                        setSelectedUser(null);
-                        editUserForm.reset();
-                      }}
-                    >
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                       Cancel
                     </Button>
                     <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
-                      <Edit className="h-4 w-4 mr-2" />
                       Update User
                     </Button>
                   </DialogFooter>
@@ -1011,10 +605,30 @@ const Users = () => {
               </Form>
             </DialogContent>
           </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="bg-background">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the user "{userToDelete?.userName}" ({userToDelete?.firstName} {userToDelete?.lastName}).
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </DashboardLayout>
   );
-};
-
-export default Users;
+}

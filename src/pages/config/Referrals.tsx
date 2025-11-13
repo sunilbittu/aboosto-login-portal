@@ -1,569 +1,641 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTable, ColumnDef } from "@/components/DataTable";
-import { Plus, Edit, Trash2, Search, Users, Gift, TrendingUp } from "lucide-react";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Users, Search, Plus, Edit, Trash2, Gift, MoreHorizontal, UserPlus, UserCheck } from "lucide-react";
+import { useState, useMemo } from "react";
+import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import { DataTable, ColumnDef } from "@/components/DataTable";
+import {
+  useReferralCampaignsList,
+  useCreateReferralCampaign,
+  useUpdateReferralCampaign,
+  useDeleteReferralCampaign,
+  useToggleReferralCampaignStatus,
+  ReferralCampaignDTO
+} from "@/services/queryService";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const referralSchema = z.object({
-  campaignName: z.string().min(1, "Campaign name is required").max(100),
-  referrerRewardType: z.string().min(1, "Referrer reward type is required"),
-  referrerRewardValue: z.string().min(1, "Referrer reward value is required"),
-  referredRewardType: z.string().min(1, "Referee reward type is required"),
-  referredRewardValue: z.string().min(1, "Referee reward value is required"),
-  validityDays: z.string().min(1, "Validity days is required"),
-  maxUsesPerReferrer: z.string().min(1, "Max uses per referrer is required"),
-  isActive: z.boolean().default(true),
+// Validation schema for add/edit referral campaign
+const referralCampaignSchema = z.object({
+  referrerRewardType: z.enum(["CASH", "CREDIT", "RIDE"], {
+    required_error: "Please select referrer reward type",
+  }),
+  referrerRewardValue: z.number()
+    .min(0, { message: "Referrer reward cannot be negative" })
+    .max(10000, { message: "Referrer reward too high" }),
+  referredRewardType: z.enum(["CASH", "CREDIT", "RIDE", "DISCOUNT"], {
+    required_error: "Please select referred reward type",
+  }),
+  referredRewardValue: z.number()
+    .min(0, { message: "Referred reward cannot be negative" })
+    .max(10000, { message: "Referred reward too high" }),
+  validityDays: z.number()
+    .min(1, { message: "Validity must be at least 1 day" })
+    .max(365, { message: "Validity cannot exceed 365 days" }),
+  maxUsesPerReferrer: z.number()
+    .min(1, { message: "Max uses must be at least 1" })
+    .max(1000, { message: "Max uses cannot exceed 1000" })
+    .optional(),
+  isActive: z.boolean(),
 });
 
-type ReferralFormData = z.infer<typeof referralSchema>;
-
-interface ReferralCampaign {
-  referralCampaignId: number;
-  campaignName: string;
-  referrerRewardType: string;
-  referrerRewardValue: number;
-  referredRewardType: string;
-  referredRewardValue: number;
-  validityDays: number;
-  maxUsesPerReferrer: number;
-  totalReferrals: number;
-  successfulReferrals: number;
-  isActive: boolean;
-  createdDate: string;
-}
+type ReferralCampaignFormValues = z.infer<typeof referralCampaignSchema>;
 
 export default function Referrals() {
-  const { toast } = useToast();
-  const [campaigns, setCampaigns] = useState<ReferralCampaign[]>([
-    {
-      referralCampaignId: 1,
-      campaignName: "New Year Special",
-      referrerRewardType: "CASH",
-      referrerRewardValue: 100,
-      referredRewardType: "DISCOUNT",
-      referredRewardValue: 50,
-      validityDays: 30,
-      maxUsesPerReferrer: 10,
-      totalReferrals: 245,
-      successfulReferrals: 189,
-      isActive: true,
-      createdDate: "2024-01-01",
-    },
-    {
-      referralCampaignId: 2,
-      campaignName: "Summer Campaign",
-      referrerRewardType: "RIDE_CREDITS",
-      referrerRewardValue: 200,
-      referredRewardType: "CASH",
-      referredRewardValue: 75,
-      validityDays: 60,
-      maxUsesPerReferrer: 20,
-      totalReferrals: 512,
-      successfulReferrals: 401,
-      isActive: true,
-      createdDate: "2024-06-01",
-    },
-  ]);
-  
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [selectedCampaign, setSelectedCampaign] = useState<ReferralCampaign | null>(null);
+  const [selectedCampaign, setSelectedCampaign] = useState<ReferralCampaignDTO | null>(null);
+  const [campaignToDelete, setCampaignToDelete] = useState<ReferralCampaignDTO | null>(null);
 
-  const rewardTypes = ["CASH", "DISCOUNT", "RIDE_CREDITS", "CASHBACK"];
+  // Pagination state
+  const [pagination, setPagination] = useState({ page: 0, size: 10 });
 
-  const form = useForm<ReferralFormData>({
-    resolver: zodResolver(referralSchema),
+  // API hooks
+  const { data: campaignsResponse, isLoading, error } = useReferralCampaignsList(
+    { page: pagination.page, size: pagination.size, sort: [] },
+    searchQuery || undefined
+  );
+
+  const createMutation = useCreateReferralCampaign();
+  const updateMutation = useUpdateReferralCampaign();
+  const deleteMutation = useDeleteReferralCampaign();
+  const toggleStatusMutation = useToggleReferralCampaignStatus();
+
+  const campaignsList = campaignsResponse?.data || [];
+
+  // Add campaign form
+  const addCampaignForm = useForm<ReferralCampaignFormValues>({
+    resolver: zodResolver(referralCampaignSchema),
     defaultValues: {
-      campaignName: "",
-      referrerRewardType: "",
-      referrerRewardValue: "",
-      referredRewardType: "",
-      referredRewardValue: "",
-      validityDays: "",
-      maxUsesPerReferrer: "",
+      referrerRewardType: "CREDIT",
+      referrerRewardValue: 10,
+      referredRewardType: "DISCOUNT",
+      referredRewardValue: 5,
+      validityDays: 30,
+      maxUsesPerReferrer: 10,
       isActive: true,
     },
   });
 
-  const columns: ColumnDef<ReferralCampaign>[] = [
-    {
-      header: "Campaign Name",
-      accessorKey: "campaignName",
-      cell: (row: ReferralCampaign) => (
-        <div>
-          <div className="font-medium">{row.campaignName}</div>
-          <div className="text-xs text-muted-foreground">
-            Created: {new Date(row.createdDate).toLocaleDateString()}
-          </div>
-        </div>
-      ),
+  // Edit campaign form
+  const editCampaignForm = useForm<ReferralCampaignFormValues>({
+    resolver: zodResolver(referralCampaignSchema),
+    defaultValues: {
+      referrerRewardType: "CREDIT",
+      referrerRewardValue: 10,
+      referredRewardType: "DISCOUNT",
+      referredRewardValue: 5,
+      validityDays: 30,
+      maxUsesPerReferrer: 10,
+      isActive: true,
     },
-    {
-      header: "Referrer Reward",
-      accessorKey: "referrerRewardValue",
-      cell: (row: ReferralCampaign) => (
-        <div className="flex items-center gap-2">
-          <Gift className="h-4 w-4 text-primary" />
-          <div>
-            <div className="font-medium">
-              {row.referrerRewardType === "DISCOUNT" ? `${row.referrerRewardValue}%` : `₹${row.referrerRewardValue}`}
-            </div>
-            <div className="text-xs text-muted-foreground">{row.referrerRewardType.replace("_", " ")}</div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: "Referee Reward",
-      accessorKey: "referredRewardValue",
-      cell: (row: ReferralCampaign) => (
-        <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-secondary" />
-          <div>
-            <div className="font-medium">
-              {row.referredRewardType === "DISCOUNT" ? `${row.referredRewardValue}%` : `₹${row.referredRewardValue}`}
-            </div>
-            <div className="text-xs text-muted-foreground">{row.referredRewardType.replace("_", " ")}</div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: "Validity",
-      accessorKey: "validityDays",
-      cell: (row: ReferralCampaign) => (
-        <Badge variant="outline">{row.validityDays} days</Badge>
-      ),
-    },
-    {
-      header: "Max Uses",
-      accessorKey: "maxUsesPerReferrer",
-      cell: (row: ReferralCampaign) => (
-        <span className="text-sm">{row.maxUsesPerReferrer} per user</span>
-      ),
-    },
-    {
-      header: "Performance",
-      accessorKey: "totalReferrals",
-      cell: (row: ReferralCampaign) => (
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-green-600" />
-          <div>
-            <div className="font-medium">{row.successfulReferrals} successful</div>
-            <div className="text-xs text-muted-foreground">
-              {row.totalReferrals} total ({Math.round((row.successfulReferrals / row.totalReferrals) * 100)}% conversion)
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: "Status",
-      accessorKey: "isActive",
-      cell: (row: ReferralCampaign) => (
-        <Badge variant={row.isActive ? "default" : "secondary"}>
-          {row.isActive ? "Active" : "Inactive"}
-        </Badge>
-      ),
-    },
-    {
-      header: "Actions",
-      accessorKey: "referralCampaignId",
-      cell: (row: ReferralCampaign) => (
-        <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => handleEdit(row)}>
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(row)}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  });
 
-  const handleAdd = (data: ReferralFormData) => {
-    const newCampaign: ReferralCampaign = {
-      referralCampaignId: campaigns.length + 1,
-      campaignName: data.campaignName,
+  const onAddCampaignSubmit = (data: ReferralCampaignFormValues) => {
+    createMutation.mutate({
       referrerRewardType: data.referrerRewardType,
-      referrerRewardValue: parseFloat(data.referrerRewardValue),
+      referrerRewardValue: data.referrerRewardValue,
       referredRewardType: data.referredRewardType,
-      referredRewardValue: parseFloat(data.referredRewardValue),
-      validityDays: parseInt(data.validityDays),
-      maxUsesPerReferrer: parseInt(data.maxUsesPerReferrer),
-      totalReferrals: 0,
-      successfulReferrals: 0,
+      referredRewardValue: data.referredRewardValue,
+      validityDays: data.validityDays,
+      maxUsesPerReferrer: data.maxUsesPerReferrer,
       isActive: data.isActive,
-      createdDate: new Date().toISOString().split('T')[0],
-    };
-
-    setCampaigns([...campaigns, newCampaign]);
-    setIsAddDialogOpen(false);
-    form.reset();
-    toast({
-      title: "Success",
-      description: "Referral campaign created successfully",
     });
+    setIsAddDialogOpen(false);
+    addCampaignForm.reset();
   };
 
-  const handleEdit = (campaign: ReferralCampaign) => {
+  const onEditCampaignSubmit = (data: ReferralCampaignFormValues) => {
+    if (selectedCampaign) {
+      updateMutation.mutate({
+        id: selectedCampaign.referralCampaignId!,
+        data: {
+          referralCampaignId: selectedCampaign.referralCampaignId,
+          referrerRewardType: data.referrerRewardType,
+          referrerRewardValue: data.referrerRewardValue,
+          referredRewardType: data.referredRewardType,
+          referredRewardValue: data.referredRewardValue,
+          validityDays: data.validityDays,
+          maxUsesPerReferrer: data.maxUsesPerReferrer,
+          isActive: data.isActive,
+        },
+      });
+    }
+    setIsEditDialogOpen(false);
+    setSelectedCampaign(null);
+    editCampaignForm.reset();
+  };
+
+  const handleEditCampaign = (campaign: ReferralCampaignDTO) => {
     setSelectedCampaign(campaign);
-    form.reset({
-      campaignName: campaign.campaignName,
-      referrerRewardType: campaign.referrerRewardType,
-      referrerRewardValue: campaign.referrerRewardValue.toString(),
-      referredRewardType: campaign.referredRewardType,
-      referredRewardValue: campaign.referredRewardValue.toString(),
-      validityDays: campaign.validityDays.toString(),
-      maxUsesPerReferrer: campaign.maxUsesPerReferrer.toString(),
-      isActive: campaign.isActive,
+    editCampaignForm.reset({
+      referrerRewardType: (campaign.referrerRewardType as "CASH" | "CREDIT" | "RIDE") || "CREDIT",
+      referrerRewardValue: campaign.referrerRewardValue || 10,
+      referredRewardType: (campaign.referredRewardType as "CASH" | "CREDIT" | "RIDE" | "DISCOUNT") || "DISCOUNT",
+      referredRewardValue: campaign.referredRewardValue || 5,
+      validityDays: campaign.validityDays || 30,
+      maxUsesPerReferrer: campaign.maxUsesPerReferrer || 10,
+      isActive: campaign.isActive ?? true,
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleUpdate = (data: ReferralFormData) => {
-    if (!selectedCampaign) return;
-
-    const updatedCampaigns = campaigns.map(c =>
-      c.referralCampaignId === selectedCampaign.referralCampaignId
-        ? {
-            ...c,
-            campaignName: data.campaignName,
-            referrerRewardType: data.referrerRewardType,
-            referrerRewardValue: parseFloat(data.referrerRewardValue),
-            referredRewardType: data.referredRewardType,
-            referredRewardValue: parseFloat(data.referredRewardValue),
-            validityDays: parseInt(data.validityDays),
-            maxUsesPerReferrer: parseInt(data.maxUsesPerReferrer),
-            isActive: data.isActive,
-          }
-        : c
-    );
-
-    setCampaigns(updatedCampaigns);
-    setIsEditDialogOpen(false);
-    setSelectedCampaign(null);
-    toast({
-      title: "Success",
-      description: "Referral campaign updated successfully",
-    });
-  };
-
-  const handleDeleteClick = (campaign: ReferralCampaign) => {
-    setSelectedCampaign(campaign);
+  const handleDeleteClick = (campaign: ReferralCampaignDTO) => {
+    setCampaignToDelete(campaign);
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDelete = () => {
-    if (!selectedCampaign) return;
-
-    setCampaigns(campaigns.filter(c => c.referralCampaignId !== selectedCampaign.referralCampaignId));
-    setIsDeleteDialogOpen(false);
-    setSelectedCampaign(null);
-    toast({
-      title: "Success",
-      description: "Referral campaign deleted successfully",
-    });
+  const handleDeleteConfirm = () => {
+    if (campaignToDelete) {
+      deleteMutation.mutate(campaignToDelete.referralCampaignId!);
+      setIsDeleteDialogOpen(false);
+      setCampaignToDelete(null);
+    }
   };
 
-  const filteredCampaigns = campaigns.filter(
-    campaign =>
-      campaign.campaignName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      campaign.referrerRewardType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      campaign.referredRewardType.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleToggleStatus = (campaign: ReferralCampaignDTO) => {
+    toggleStatusMutation.mutate(campaign.referralCampaignId!);
+  };
+
+  const filteredCampaigns = campaignsList.filter(campaign =>
+    campaign.referrerRewardType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    campaign.referredRewardType?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalReferrals = campaigns.reduce((sum, c) => sum + c.totalReferrals, 0);
-  const totalSuccessful = campaigns.reduce((sum, c) => sum + c.successfulReferrals, 0);
-  const avgConversion = totalReferrals > 0 ? Math.round((totalSuccessful / totalReferrals) * 100) : 0;
+  const getStatusBadgeClass = (status: boolean) => {
+    return status ? "bg-green-500" : "bg-muted text-muted-foreground";
+  };
 
-  const ReferralForm = ({ onSubmit }: { onSubmit: (data: ReferralFormData) => void }) => (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+  const getRewardTypeBadgeClass = (type: string) => {
+    switch (type) {
+      case "CASH": return "bg-green-500";
+      case "CREDIT": return "bg-blue-500";
+      case "RIDE": return "bg-purple-500";
+      case "DISCOUNT": return "bg-orange-500";
+      default: return "bg-gray-500";
+    }
+  };
+
+  const formatRewardValue = (value: number, type: string) => {
+    switch (type) {
+      case "CASH":
+        return `$${value.toFixed(2)}`;
+      case "CREDIT":
+        return `${value} credits`;
+      case "RIDE":
+        return `${value} ride${value !== 1 ? 's' : ''}`;
+      case "DISCOUNT":
+        return `${value}% off`;
+      default:
+        return value.toString();
+    }
+  };
+
+  // Define table columns
+  const columns = useMemo<ColumnDef<ReferralCampaignDTO>[]>(
+    () => [
+      {
+        header: "Campaign ID",
+        accessorKey: "referralCampaignId",
+        cell: (campaign) => (
+          <div className="font-mono text-sm">
+            #{campaign.referralCampaignId}
+          </div>
+        ),
+      },
+      {
+        header: "Referrer Reward",
+        sortable: false,
+        cell: (campaign) => (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-blue-500" />
+              <Badge className={getRewardTypeBadgeClass(campaign.referrerRewardType || "")}>
+                {campaign.referrerRewardType || "N/A"}
+              </Badge>
+            </div>
+            <div className="font-semibold text-lg">
+              {formatRewardValue(campaign.referrerRewardValue || 0, campaign.referrerRewardType || "")}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: "Referred Reward",
+        sortable: false,
+        cell: (campaign) => (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <UserCheck className="h-4 w-4 text-green-500" />
+              <Badge className={getRewardTypeBadgeClass(campaign.referredRewardType || "")}>
+                {campaign.referredRewardType || "N/A"}
+              </Badge>
+            </div>
+            <div className="font-semibold text-lg">
+              {formatRewardValue(campaign.referredRewardValue || 0, campaign.referredRewardType || "")}
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: "Validity",
+        accessorKey: "validityDays",
+        cell: (campaign) => (
+          <div className="text-sm">
+            <div className="font-semibold">{campaign.validityDays || 0} days</div>
+            <div className="text-muted-foreground">From referral date</div>
+          </div>
+        ),
+      },
+      {
+        header: "Usage Limits",
+        sortable: false,
+        cell: (campaign) => (
+          <div className="text-sm">
+            {campaign.maxUsesPerReferrer && (
+              <div>Max {campaign.maxUsesPerReferrer} uses/referrer</div>
+            )}
+            {!campaign.maxUsesPerReferrer && (
+              <div className="text-muted-foreground">Unlimited uses</div>
+            )}
+          </div>
+        ),
+      },
+      {
+        header: "Status",
+        accessorKey: "isActive",
+        cell: (campaign) => (
+          <Badge className={getStatusBadgeClass(campaign.isActive ?? false)}>
+            {campaign.isActive ? "ACTIVE" : "INACTIVE"}
+          </Badge>
+        ),
+      },
+      {
+        header: "Actions",
+        sortable: false,
+        className: "text-right",
+        cell: (campaign) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEditCampaign(campaign)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleToggleStatus(campaign)}>
+                <Switch className="h-4 w-4 mr-2" />
+                {campaign.isActive ? "Deactivate" : "Activate"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleDeleteClick(campaign)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    []
+  );
+
+  const ReferralCampaignFormFields = ({ form }: { form: any }) => (
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Referrer Reward Type */}
         <FormField
           control={form.control}
-          name="campaignName"
+          name="referrerRewardType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Campaign Name</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., New Year Special" {...field} />
-              </FormControl>
+              <FormLabel>Referrer Reward Type *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reward type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash ($)</SelectItem>
+                  <SelectItem value="CREDIT">Account Credits</SelectItem>
+                  <SelectItem value="RIDE">Free Rides</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>What the referrer gets for referring</FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-              <Gift className="h-4 w-4" />
-              Referrer Rewards (Person who refers)
-            </h3>
-          </div>
-
-          <FormField
-            control={form.control}
-            name="referrerRewardType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Reward Type</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select reward type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="bg-background z-50">
-                    {rewardTypes.map(type => (
-                      <SelectItem key={type} value={type}>
-                        {type.replace("_", " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="referrerRewardValue"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Reward Value</FormLabel>
-                <FormControl>
-                  <Input type="number" step="0.01" placeholder="e.g., 100" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="col-span-2">
-            <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Referee Rewards (New user who signs up)
-            </h3>
-          </div>
-
-          <FormField
-            control={form.control}
-            name="referredRewardType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Reward Type</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select reward type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent className="bg-background z-50">
-                    {rewardTypes.map(type => (
-                      <SelectItem key={type} value={type}>
-                        {type.replace("_", " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="referredRewardValue"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Reward Value</FormLabel>
-                <FormControl>
-                  <Input type="number" step="0.01" placeholder="e.g., 50" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="col-span-2">
-            <h3 className="text-sm font-medium mb-3">Campaign Rules</h3>
-          </div>
-
-          <FormField
-            control={form.control}
-            name="validityDays"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Validity (Days)</FormLabel>
-                <FormControl>
-                  <Input type="number" placeholder="e.g., 30" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="maxUsesPerReferrer"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Max Uses Per Referrer</FormLabel>
-                <FormControl>
-                  <Input type="number" placeholder="e.g., 10" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
+        {/* Referrer Reward Value */}
         <FormField
           control={form.control}
-          name="isActive"
+          name="referrerRewardValue"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-              <div className="space-y-0.5">
-                <FormLabel className="text-base">Active Status</FormLabel>
-                <div className="text-sm text-muted-foreground">
-                  Enable or disable this referral campaign
-                </div>
-              </div>
+            <FormItem>
+              <FormLabel>Referrer Reward Value *</FormLabel>
               <FormControl>
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="10"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
               </FormControl>
+              <FormDescription>
+                {form.watch("referrerRewardType") === "CASH" && "Amount in dollars"}
+                {form.watch("referrerRewardType") === "CREDIT" && "Number of credits"}
+                {form.watch("referrerRewardType") === "RIDE" && "Number of free rides"}
+              </FormDescription>
+              <FormMessage />
             </FormItem>
           )}
         />
 
-        <DialogFooter>
-          <Button type="submit">Save Campaign</Button>
-        </DialogFooter>
-      </form>
-    </Form>
+        {/* Referred Reward Type */}
+        <FormField
+          control={form.control}
+          name="referredRewardType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Referred Reward Type *</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reward type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="CASH">Cash ($)</SelectItem>
+                  <SelectItem value="CREDIT">Account Credits</SelectItem>
+                  <SelectItem value="RIDE">Free Rides</SelectItem>
+                  <SelectItem value="DISCOUNT">Discount (%)</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>What the referred user gets</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Referred Reward Value */}
+        <FormField
+          control={form.control}
+          name="referredRewardValue"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Referred Reward Value *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="5"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>
+                {form.watch("referredRewardType") === "CASH" && "Amount in dollars"}
+                {form.watch("referredRewardType") === "CREDIT" && "Number of credits"}
+                {form.watch("referredRewardType") === "RIDE" && "Number of free rides"}
+                {form.watch("referredRewardType") === "DISCOUNT" && "Discount percentage"}
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Validity Days */}
+        <FormField
+          control={form.control}
+          name="validityDays"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Validity Period (Days) *</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="1"
+                  max="365"
+                  placeholder="30"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>How long the referral is valid</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Max Uses Per Referrer */}
+        <FormField
+          control={form.control}
+          name="maxUsesPerReferrer"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Max Uses Per Referrer</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  placeholder="10"
+                  {...field}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                />
+              </FormControl>
+              <FormDescription>Maximum referrals per user (optional)</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* Is Active */}
+      <FormField
+        control={form.control}
+        name="isActive"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <FormLabel className="text-base">Active Status</FormLabel>
+              <FormDescription>
+                Enable this referral campaign for new users
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+    </>
   );
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Referrals</h1>
-            <p className="text-muted-foreground">Manage referral programs and rewards</p>
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <div className="container px-4 py-8">
+          <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-3xl font-bold flex items-center gap-2">
+                  <Users className="h-8 w-8 text-primary" />
+                  Referral Campaign Management
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  Manage referral programs and reward campaigns
+                </p>
+              </div>
+
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-primary to-secondary">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Referral Campaign
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background">
+                  <DialogHeader>
+                    <DialogTitle>Add New Referral Campaign</DialogTitle>
+                    <DialogDescription>
+                      Create a new referral program with rewards
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <Form {...addCampaignForm}>
+                    <form onSubmit={addCampaignForm.handleSubmit(onAddCampaignSubmit)} className="space-y-4">
+                      <ReferralCampaignFormFields form={addCampaignForm} />
+
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                          Create Campaign
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative mt-6">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search by reward type..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-card border-border"
+              />
+            </div>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Campaign
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+
+          {/* Referral Campaigns Table */}
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-destructive">Error loading referral campaigns</p>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
+            ) : (
+              <DataTable
+                data={filteredCampaigns}
+                columns={columns}
+                pageSize={pagination.size}
+                onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                currentPage={pagination.page}
+              />
+            )}
+          </div>
+
+          {/* Edit Referral Campaign Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background">
               <DialogHeader>
-                <DialogTitle>Add New Referral Campaign</DialogTitle>
-                <DialogDescription>Create a new referral program with rewards for both referrer and referee</DialogDescription>
+                <DialogTitle>Edit Referral Campaign</DialogTitle>
+                <DialogDescription>
+                  Update referral campaign settings and rewards
+                </DialogDescription>
               </DialogHeader>
-              <ReferralForm onSubmit={handleAdd} />
+
+              <Form {...editCampaignForm}>
+                <form onSubmit={editCampaignForm.handleSubmit(onEditCampaignSubmit)} className="space-y-4">
+                  <ReferralCampaignFormFields form={editCampaignForm} />
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-gradient-to-r from-primary to-secondary">
+                      Update Campaign
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
             </DialogContent>
           </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent className="bg-background">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the referral campaign #{campaignToDelete?.referralCampaignId}.
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Referrals</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalReferrals}</div>
-              <p className="text-xs text-muted-foreground">Across all campaigns</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Successful Referrals</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalSuccessful}</div>
-              <p className="text-xs text-muted-foreground">Completed sign-ups</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
-              <Gift className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{avgConversion}%</div>
-              <p className="text-xs text-muted-foreground">Average across campaigns</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Referral Campaigns</CardTitle>
-            <div className="flex items-center gap-2 mt-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by campaign name or reward type..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <DataTable columns={columns} data={filteredCampaigns} />
-          </CardContent>
-        </Card>
-
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Referral Campaign</DialogTitle>
-              <DialogDescription>Update referral program details and rewards</DialogDescription>
-            </DialogHeader>
-            <ReferralForm onSubmit={handleUpdate} />
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete the referral campaign "{selectedCampaign?.campaignName}". This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </DashboardLayout>
   );
