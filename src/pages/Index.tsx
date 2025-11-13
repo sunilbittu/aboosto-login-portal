@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Truck, Car, MapPin, Route } from "lucide-react";
+import { Truck, Car, MapPin, Route, Navigation, Users, BarChart3, Shield, Clock, Zap } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -96,6 +97,92 @@ const Index = () => {
           >
             Sign In
           </Button>
+        </div>
+        
+        {/* Features Section */}
+        <div className="mt-20 max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12 text-foreground">
+            Powerful Fleet Management Features
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Real-time Tracking */}
+            <Card className="p-6 backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-lg hover:scale-105 transition-all duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-4 rounded-full bg-primary/10">
+                  <Navigation className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">Real-Time Tracking</h3>
+                <p className="text-muted-foreground">
+                  Monitor your entire fleet in real-time with live GPS tracking and route optimization
+                </p>
+              </div>
+            </Card>
+
+            {/* Driver Management */}
+            <Card className="p-6 backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-lg hover:scale-105 transition-all duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-4 rounded-full bg-secondary/10">
+                  <Users className="h-8 w-8 text-secondary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">Driver Management</h3>
+                <p className="text-muted-foreground">
+                  Comprehensive driver profiles, performance tracking, and automated scheduling
+                </p>
+              </div>
+            </Card>
+
+            {/* Analytics */}
+            <Card className="p-6 backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-lg hover:scale-105 transition-all duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-4 rounded-full bg-accent/10">
+                  <BarChart3 className="h-8 w-8 text-accent" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">Advanced Analytics</h3>
+                <p className="text-muted-foreground">
+                  Detailed insights and reports to optimize operations and maximize efficiency
+                </p>
+              </div>
+            </Card>
+
+            {/* Security */}
+            <Card className="p-6 backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-lg hover:scale-105 transition-all duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-4 rounded-full bg-primary/10">
+                  <Shield className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">Enterprise Security</h3>
+                <p className="text-muted-foreground">
+                  Bank-level encryption and role-based access control for your data
+                </p>
+              </div>
+            </Card>
+
+            {/* 24/7 Operations */}
+            <Card className="p-6 backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-lg hover:scale-105 transition-all duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-4 rounded-full bg-secondary/10">
+                  <Clock className="h-8 w-8 text-secondary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">24/7 Operations</h3>
+                <p className="text-muted-foreground">
+                  Round-the-clock monitoring and support for uninterrupted service
+                </p>
+              </div>
+            </Card>
+
+            {/* Instant Updates */}
+            <Card className="p-6 backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-lg hover:scale-105 transition-all duration-300">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className="p-4 rounded-full bg-accent/10">
+                  <Zap className="h-8 w-8 text-accent" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">Instant Updates</h3>
+                <p className="text-muted-foreground">
+                  Real-time notifications and alerts keep your team always informed
+                </p>
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
