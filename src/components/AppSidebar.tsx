@@ -14,7 +14,8 @@ import {
   TrendingUp,
   Gift,
   UserPlus,
-  AlertCircle
+  AlertCircle,
+  Navigation
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -49,6 +50,7 @@ const adminItems = [
   { title: "Permissions", url: "/admin/permissions", icon: Lock },
   { title: "Riders", url: "/admin/riders", icon: Car },
   { title: "Drivers", url: "/drivers", icon: Truck },
+  { title: "Trips", url: "/trips", icon: Navigation },
   { title: "Disputes", url: "/disputes", icon: AlertCircle },
 ];
 
