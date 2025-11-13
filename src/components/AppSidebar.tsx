@@ -13,7 +13,8 @@ import {
   DollarSign,
   TrendingUp,
   Gift,
-  UserPlus
+  UserPlus,
+  AlertCircle
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -48,6 +49,7 @@ const adminItems = [
   { title: "Permissions", url: "/admin/permissions", icon: Lock },
   { title: "Riders", url: "/admin/riders", icon: Car },
   { title: "Drivers", url: "/drivers", icon: Truck },
+  { title: "Disputes", url: "/disputes", icon: AlertCircle },
 ];
 
 const configItems = [
