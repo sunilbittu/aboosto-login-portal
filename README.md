@@ -66,27 +66,33 @@ Simply open [Lovable](https://lovable.dev/projects/aeff9ba2-9024-4041-8663-5ef16
 
 ## Configuring the API proxy for production deployments
 
-The frontend now reads its API base URL from the `VITE_API_BASE_URL` environment variable. For local development you can leave this
-unset and Vite will call the bundled Express proxy at `/api`.
+The frontend talks to two backend services:
 
-When you deploy the static bundle, serve it with the provided Express proxy (`npm run serve`). The server forwards every request
-under `/api` to your backend while adding the required CORS headers, so the browser never calls the backend directly.
+- The **configuration service** exposed under `http://123.176.35.22:8081/swagger-ui/index.html`.
+- The **admin service** exposed under `http://123.176.35.22:8082/swagger-ui/index.html`.
+
+In development the Vite dev server automatically proxies requests so the browser never contacts those origins directly.
+For production deployments serve the built assets with the provided Express server (`npm run serve`). It exposes dedicated
+proxy routes for each backend, adds CORS headers and forwards requests transparently.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | `/api` | Base URL used by the frontend to reach the proxy. Override it if you expose the proxy under another path. |
-| `PROXY_TARGET` | `http://123.176.35.22:8082` | Origin of the backend API. |
-| `PROXY_TARGET_PATH` | `/api` | Path prefix on the backend that should receive proxied requests. |
-| `PROXY_PREFIX` | `/api` | Path prefix exposed by the Express proxy. |
-| `PORT` | `4173` | Port the proxy listens on. |
-| `CORS_ALLOW_ORIGIN` | *(empty)* | Optional explicit `Access-Control-Allow-Origin` header sent by the proxy. |
+| `PORT` | `8085` | Port the Express server listens on. |
+| `STATIC_DIR` | `../dist` | Folder that contains the built frontend assets. |
+| `CONFIG_PROXY_PREFIX` | `/config-api` | Route prefix exposed by the server for the configuration service. |
+| `CONFIG_PROXY_TARGET` | `http://123.176.35.22:8081` | Target origin for configuration service requests. |
+| `ADMIN_PROXY_PREFIX` | `/admin-api` | Route prefix exposed by the server for the admin service. |
+| `ADMIN_PROXY_TARGET` | `http://123.176.35.22:8082` | Target origin for admin service requests. |
+| `CORS_ALLOW_ORIGIN` | *(empty)* | Optional comma-separated list of allowed origins. If unset the server reflects the request origin. |
+| `VITE_CONFIG_API_BASE_URL` | `/config-api` (dev) | Override to point the frontend at a different configuration API base URL. |
+| `VITE_ADMIN_API_BASE_URL` | `/admin-api` (dev) | Override to point the frontend at a different admin API base URL. |
 
 ### Running the proxy in production
 
-1. Build the frontend with `npm run build` (set `VITE_API_BASE_URL=/api` if the proxy is mounted at `/api`).
-2. Start the proxy with `PORT=80 PROXY_TARGET=http://123.176.35.22:8082 npm run serve`.
-3. Point your browser to the server's origin (e.g. `https://your-ec2-hostname`) and the app will transparently proxy API requests
-   to the backend without requiring backend CORS support.
+1. Build the frontend with `npm run build`.
+2. Start the proxy with `PORT=8085 npm run serve` (set the `*_PROXY_TARGET` variables if you need different backend origins).
+3. Point your browser to the server's origin (e.g. `http://your-host:8085`) and the app will transparently proxy API requests
+   to the backend services without requiring backend-side CORS support.
 
 ## Can I connect a custom domain to my Lovable project?
 
