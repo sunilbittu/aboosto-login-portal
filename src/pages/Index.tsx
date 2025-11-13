@@ -184,6 +184,61 @@ const Index = () => {
             </Card>
           </div>
         </div>
+        
+        {/* Footer Section */}
+        <footer className="mt-24 border-t border-border/50 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto px-6 py-12">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+              {/* Company Info */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Truck className="h-6 w-6 text-primary" />
+                  <h3 className="text-lg font-bold text-foreground">Aboosto Fleet</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Leading fleet management solution in Malaysia, empowering businesses with smart transportation technology.
+                </p>
+              </div>
+
+              {/* Quick Links */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-foreground">Quick Links</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><button onClick={() => navigate("/login")} className="hover:text-primary transition-colors">Sign In</button></li>
+                  <li><button onClick={() => navigate("/signup")} className="hover:text-primary transition-colors">Sign Up</button></li>
+                  <li><button className="hover:text-primary transition-colors">About Us</button></li>
+                  <li><button className="hover:text-primary transition-colors">Contact</button></li>
+                </ul>
+              </div>
+
+              {/* Services */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-foreground">Services</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="hover:text-primary transition-colors cursor-pointer">Fleet Management</li>
+                  <li className="hover:text-primary transition-colors cursor-pointer">Driver Management</li>
+                  <li className="hover:text-primary transition-colors cursor-pointer">Real-Time Tracking</li>
+                  <li className="hover:text-primary transition-colors cursor-pointer">Analytics & Reporting</li>
+                </ul>
+              </div>
+
+              {/* Contact Info */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-foreground">Contact</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li>Kuala Lumpur, Malaysia</li>
+                  <li>info@aboosto.com</li>
+                  <li>+60 3-1234-5678</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Bottom Bar */}
+            <div className="pt-8 border-t border-border/50 text-center text-sm text-muted-foreground">
+              <p>&copy; {new Date().getFullYear()} Aboosto Fleet. All rights reserved.</p>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
