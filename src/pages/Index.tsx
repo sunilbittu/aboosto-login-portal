@@ -91,15 +91,8 @@ const Index = () => {
         </p>
         <div className="flex gap-4 justify-center pt-4">
           <Button
-            onClick={() => navigate("/dashboard")}
-            className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shadow-md px-8"
-          >
-            View Dashboard
-          </Button>
-          <Button
             onClick={() => navigate("/login")}
-            variant="outline"
-            className="px-8"
+            className="bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shadow-md px-8"
           >
             Sign In
           </Button>
